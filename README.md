@@ -28,3 +28,36 @@ The above payload is hash signed and the hash result appended to the protocol me
 
 The seqnum will be used to avoid cheating from pongs. And the table would be 
 checked for nodes that are not atcive, and such nodes would be removed.
+
+## Usage
+
+Put this in your `Cargo.toml`:
+
+```toml
+[dependencies]
+listenet = "0.1.0"
+```
+
+And this in your crate root:
+
+```rust
+extern crate listenet;
+```
+
+To get started:
+```
+use::listenet::daemonnet::{daemon_net};
+daemon_net(
+    rx_ip: String,
+    rx_port: String,
+    pub_key: String,
+    pay_addr: String,
+    tx_ip: String,
+    tx_port: String,
+    multicast_ip: String,
+    secret: [u8; 64],
+);
+Obey the types. pub_key and pay_addr are encoded version of public address
+rx_ip and rx_port is used for joining multicast. tx_ip and rx_ip should be valid 
+udp IP addresses.  multicast_ip is the muticast ip
+```

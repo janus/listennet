@@ -2,6 +2,14 @@
 name = "listenet"
 version = "0.1.0"
 authors = ["janus <emekamicro@gmail.com>"]
+description = "Daemon Listener (member of UDP Multicast"
+homepage = "https://github.com/janus/listennet"
+repository = "https://github.com/janus/listennet"
+
+[lib]
+name = "listenet"
+path = "src/lib.rs"
+
 
 [dependencies]
 bytes = "0.4.0"
@@ -10,3 +18,4 @@ base64 = "0.6.0"
 mio = "0.6.10"
 time = "0.1.38"
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
+
