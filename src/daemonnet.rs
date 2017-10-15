@@ -15,13 +15,13 @@ const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
 fn daemon_net(
-    rx_ip: String,
-    rx_port: String,
-    pub_key: String,
-    pay_addr: String,
-    tx_ip: String,
-    tx_port: String,
-    multicast_ip: String,
+    rx_ip: &str,
+    rx_port: &str,
+    pub_key: &str,
+    pay_addr: &str,
+    tx_ip: &str,
+    tx_port: &str,
+    multicast_ip: &str,
     secret: [u8; 64],
 ) {
     let mut ludpnet;
@@ -34,7 +34,7 @@ fn daemon_net(
     ludpnet.start_net(multicast_ip);
 }
 
-pub fn UDPsocket(ipadr: &String, port: &String) -> (UdpSocket, Ipv4Addr) {
+pub fn UDPsocket(ipadr: &str, port: &str) -> (UdpSocket, Ipv4Addr) {
     let ip_and_port = format!("{}:{}", ipadr.clone(), port);
     let ip4addr: Ipv4Addr = ipadr.parse().unwrap();
     let saddr: SocketAddr = ip_and_port.parse().unwrap();
@@ -56,7 +56,7 @@ pub struct LudpNet {
 }
 
 impl LudpNet {
-    pub fn new(rx_ip: String, rx_udp: String, pro_vec: Vec<String>, secret: [u8; 64]) -> LudpNet {
+    pub fn new(rx_ip: &str, rx_udp: &str, pro_vec: Vec<String>, secret: [u8; 64]) -> LudpNet {
         let (rx_udpsock, ip4addr) = UDPsocket(&rx_ip, &rx_udp);
         let (tx_udpsock, _) = UDPsocket(&pro_vec[2], &pro_vec[3]);
         LudpNet {
@@ -80,13 +80,12 @@ impl LudpNet {
         };
     }
 
-    //To add either threadpool or Eventloop or Poll.
     pub fn read_udpsocket(&mut self, _: &mut Poll, token: Token, _: Ready) {
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
                 match self.rx.recv_from(&mut buf[..]) {
-                    Ok(Some((len, address))) => {
+                    Ok(Some((_, _))) => {
                         self.parse_packet(buf);
                     }
                     Ok(_) => {}
@@ -129,7 +128,7 @@ impl LudpNet {
         }
     }
 
-    pub fn start_net(&mut self, multicastip: String) {
+    pub fn start_net(&mut self, multicastip: &str) {
         let mut poll = Poll::new().unwrap();
         self.rx
             .join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr)
@@ -173,42 +172,37 @@ mod test {
     use daemonnet::{LudpNet, UDPsocket, daemon_net};
 
 
-    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String, [u8; 64]) {
+    fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();
         return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
     }
 
     fn pong_host() -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
-            encodeVal("41235".to_string(), "224.0.0.3".to_string());
+            encodeVal("41235", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let mut vec = Vec::new();
         vec.push(&pub_key);
         vec.push(&cloned_pub_key);
         vec.push(&ip_addr);
         vec.push(&udp_port);
-        let bytes = serialization::payload(&vec, 45, &secret, "ipv4_hello_confirm".to_string());
+        let bytes = serialization::payload(&vec, 45, &secret, "hello_confirm");
         return (bytes, pub_key.clone(), secret);
     }
 
     #[test]
     fn test_udp_socket_send_recv() {
         let (mbytes, pub_key, secret) = pong_host();
-        let (ip_addr, udp_port) = (
-            encode(&"41235".to_string()),
-            encode(&"224.0.0.3".to_string()),
-        );
         let cloned_pub_key = pub_key.clone();
         let mut vec = Vec::new();
-        vec.push(pub_key.to_string());
-        vec.push(cloned_pub_key.to_string());
+        vec.push(pub_key);
+        vec.push(cloned_pub_key);
         vec.push("224.0.0.3".to_string());
         vec.push("41235".to_string());
-        let seqnum = 45;
         let mut daem = LudpNet::new(
-            "224.0.0.0".to_string(),
-            "56731".to_string(),
-            vec.clone(),
+            "224.0.0.0",
+            "56731",
+            vec,
             secret,
         );
         daem.parse_packet(mbytes);
@@ -216,16 +210,15 @@ mod test {
     }
 
     fn daemonnet_send_packet() {
-        let (mut mbytes, pub_key, secret) = pong_host();
-        let cloned_pub_key = pub_key.clone();
+        let (_, pub_key, secret) = pong_host();
         daemon_net(
-            "224.0.0.3".to_string(),
-            "41235".to_string(),
-            cloned_pub_key,
-            pub_key,
-            "224.0.0.4".to_string(),
-            "41233".to_string(),
-            "227.1.1.100".to_string(),
+            "224.0.0.3",
+            "41235",
+            &pub_key.clone(),
+            &pub_key,
+            "224.0.0.4",
+            "41233",
+            "227.1.1.100",
             secret,
         );
     }
