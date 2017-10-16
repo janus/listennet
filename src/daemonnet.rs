@@ -5,6 +5,7 @@ use base64::{encode, decode};
 use edcert::ed25519;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
+//use std::net::UdpSocket;
 use mio::udp::*;
 use serialization;
 use types::{ENDPOINT, DATAGRAM};
@@ -15,6 +16,7 @@ const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
 fn daemon_net(
+    cast_ip: &str,
     rx_ip: &str,
     rx_port: &str,
     pub_key: &str,
@@ -26,39 +28,39 @@ fn daemon_net(
 ) {
     let mut ludpnet;
     let mut profile = Vec::new();
-    profile.push(pub_key.to_string());
-    profile.push(pay_addr.to_string());
-    profile.push(tx_ip.to_string());
-    profile.push(tx_port.to_string());
-    ludpnet = LudpNet::new(rx_ip, rx_port, profile, secret);
+    profile.push(pub_key);
+    profile.push(pay_addr);
+    profile.push(tx_ip);
+    profile.push(tx_port);
+    ludpnet = LudpNet::new(cast_ip, rx_ip, rx_port, profile, secret);
     ludpnet.start_net(multicast_ip);
 }
 
-pub fn UDPsocket(ipadr: &str, port: &str) -> (UdpSocket, Ipv4Addr) {
+pub fn UDPsocket(cast_ip: &str, ipadr: &str, port: &str) -> (UdpSocket, Ipv4Addr) {
     let ip_and_port = format!("{}:{}", ipadr.clone(), port);
-    let ip4addr: Ipv4Addr = ipadr.parse().unwrap();
+    let ip4addr = cast_ip.parse().unwrap();
     let saddr: SocketAddr = ip_and_port.parse().unwrap();
     let socket = match UdpSocket::bind(&saddr) {
         Ok(s) => s,
         Err(e) => panic!("Failed to establish bind socket {}", e),
     };
-    (socket, ip4addr.clone())
+    (socket, ip4addr)
 }
 
-pub struct LudpNet {
+pub struct LudpNet<'a> {
     tx: UdpSocket,
     rx: UdpSocket,
-    profile: Vec<String>,
+    profile: Vec<&'a str>,
     secret: [u8; 64],
     saddr: Ipv4Addr,
     shutdown: bool,
     pub send_queue: VecDeque<DATAGRAM>,
 }
 
-impl LudpNet {
-    pub fn new(rx_ip: &str, rx_udp: &str, pro_vec: Vec<String>, secret: [u8; 64]) -> LudpNet {
-        let (rx_udpsock, ip4addr) = UDPsocket(&rx_ip, &rx_udp);
-        let (tx_udpsock, _) = UDPsocket(&pro_vec[2], &pro_vec[3]);
+impl<'a>  LudpNet<'a> {
+    pub fn new(cast_ip: &str, rx_ip: &str, rx_udp: &str, pro_vec: Vec<&'a str>, secret: [u8; 64]) -> LudpNet<'a> {
+        let (rx_udpsock, ip4addr) = UDPsocket(&cast_ip, &rx_ip, &rx_udp);
+        let (tx_udpsock, _) = UDPsocket(&cast_ip, &pro_vec[2], &pro_vec[3]);
         LudpNet {
             tx: tx_udpsock,
             rx: rx_udpsock,
@@ -71,8 +73,7 @@ impl LudpNet {
     }
 
     pub fn parse_packet(&mut self, buf: BytesMut) {
-        let pfile = self.profile.iter().map(|s| s).collect();
-        match serialization::on_ping(buf, &pfile, &self.secret) {
+        match serialization::on_ping(buf, &self.profile, &self.secret) {
             Some(dgram) => {
                 self.send_queue.push_back(dgram);
             }
@@ -129,10 +130,15 @@ impl LudpNet {
     }
 
     pub fn start_net(&mut self, multicastip: &str) {
+        
         let mut poll = Poll::new().unwrap();
-        self.rx
-            .join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr)
-            .unwrap();
+
+        //let any = "0.0.0.0".parse().unwrap();
+ 
+
+         self.rx.join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr).unwrap();
+
+ 
 
         poll.register(&self.tx, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
@@ -141,6 +147,8 @@ impl LudpNet {
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
+
+        
 
         while !self.shutdown {
             poll.poll(&mut events, None).unwrap();
@@ -179,14 +187,15 @@ mod test {
 
     fn pong_host() -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
-            encodeVal("41235", "224.0.0.3");
+            encodeVal("41238", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let mut vec = Vec::new();
         vec.push(&pub_key);
         vec.push(&cloned_pub_key);
         vec.push(&ip_addr);
         vec.push(&udp_port);
-        let bytes = serialization::payload(&vec, 45, &secret, "hello_confirm");
+        let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
+        let bytes = serialization::payload(&vec_st, 45, &secret, "hello_confirm");
         return (bytes, pub_key.clone(), secret);
     }
 
@@ -198,26 +207,30 @@ mod test {
         vec.push(pub_key);
         vec.push(cloned_pub_key);
         vec.push("224.0.0.3".to_string());
-        vec.push("41235".to_string());
+        vec.push("41215".to_string());
+        let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let mut daem = LudpNet::new(
+            "0.0.0.0",
             "224.0.0.0",
-            "56731",
-            vec,
+            "56733",
+            vec_st,
             secret,
         );
         daem.parse_packet(mbytes);
         assert_eq!(1, daem.send_queue.len());
     }
 
+    #[test]
     fn daemonnet_send_packet() {
         let (_, pub_key, secret) = pong_host();
         daemon_net(
+            "0.0.0.0",
             "224.0.0.3",
-            "41235",
+            "44235",
             &pub_key.clone(),
             &pub_key,
             "224.0.0.4",
-            "41233",
+            "42233",
             "227.1.1.100",
             secret,
         );
