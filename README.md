@@ -48,16 +48,17 @@ To get started:
 ```
 use::listenet::daemonnet::{daemon_net};
 daemon_net(
-    rx_ip: String,
-    rx_port: String,
-    pub_key: String,
-    pay_addr: String,
-    tx_ip: String,
-    tx_port: String,
-    multicast_ip: String,
+    cast_ip: &str,
+    rx_ip: &str,
+    rx_port: &str,
+    pub_key: &str,
+    pay_addr: &str,
+    tx_ip: &str,
+    tx_port: &str,
+    multicast_ip: &str,
     secret: [u8; 64],
 );
 Obey the types. pub_key and pay_addr are encoded version of public address
 rx_ip and rx_port is used for joining multicast. tx_ip and rx_ip should be valid 
-udp IP addresses.  multicast_ip is the muticast ip
+udp IP addresses.  multicast_ip is the muticast ip. cast_ip is the ip address the reciever will use to join multicast
 ```

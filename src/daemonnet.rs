@@ -129,6 +129,9 @@ impl<'a>  LudpNet<'a> {
         }
     }
 
+    /**
+     * Enables the network to run event poll
+     */
     pub fn start_net(&mut self, multicastip: &str) {
         
         let mut poll = Poll::new().unwrap();

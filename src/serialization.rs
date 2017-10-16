@@ -40,6 +40,9 @@ pub fn decode_str(mstr: &str) -> Option<String> {
     };
 }
 
+/**
+ * Builds the packet.. It is a BytesMut
+ */
 pub fn payload(
     profile: &Vec<&str>,
     seqnum: i32,
@@ -66,6 +69,9 @@ pub fn payload(
     rslt
 }
 
+/**
+ * This is where packet from multicat is verified(hash)   
+ */
 pub fn on_ping(packet: BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Option<DATAGRAM> {
     let vec_str: Vec<&str>;
     let payload;
@@ -74,32 +80,29 @@ pub fn on_ping(packet: BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Opti
     if check_size(&packet) && match_header(&packet) {
         vec_str = bytes_vec(&packet);
         payload = extract_payload(&vec_str);
-        pub_key = match decode_key(vec_str[1].clone()) {
+        pub_key = match decode_key(&vec_str[1]) {
             Some(v) => v,
-            _ => {
-                return None;
-            }
+            _ => { return None; }
         };
-        sig = match decode_key(vec_str[vec_str.len() - 1].clone()) {
+        sig = match decode_key(&vec_str[vec_str.len() - 1]) {
             Some(v) => v,
-            _ => {
-                return None;
-            }
+            _ => { return None; }
         };
         if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
             match create_datagram(vec_str, profile, secret) {
-                Some(v) => {
-                    return Some(v);
-                }
-                _ => {
-                    return None;
-                }
+                Some(v) => { return Some(v); }
+                _ => { return None;}
             };
         }   
     }
     return None;
 }
 
+/**
+ * Returns either nothing or a struct Datagram, which contains
+ * endpoint address and packet to be sent
+ * 
+ */
 pub fn create_datagram(
     vec_str: Vec<&str>,
     profile: &Vec<&str>,
