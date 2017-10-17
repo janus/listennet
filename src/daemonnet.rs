@@ -30,27 +30,24 @@ fn daemon_net(
     profile.push(pay_addr);
     profile.push(tx_ip);
     profile.push(tx_port);
-    ludpnet = LudpNet::new(cast_ip, rx_ip, rx_port, profile, secret);
-    ludpnet.start_net(multicast_ip);
+    ludpnet = LudpNet::new(cast_ip,  profile, secret);
+    ludpnet.start_net(multicast_ip,rx_ip, rx_port,tx_ip,tx_port );
 }
 
-pub fn UDPsocket(cast_ip: &str, ipadr: &str, port: &str) -> (UdpSocket, Ipv4Addr) {
+pub fn UDPsocket(ipadr: &str, port: &str) -> UdpSocket {
     let ip_and_port = format!("{}:{}", ipadr.clone(), port);
-    let ip4addr = cast_ip.parse().unwrap();
     let saddr: SocketAddr = ip_and_port.parse().unwrap();
     let socket = match UdpSocket::bind(&saddr) {
         Ok(s) => s,
         Err(e) => panic!("Failed to establish bind socket {}", e),
     };
-    (socket, ip4addr)
+    socket
 }
 
 pub struct Socket_Network{
     pub sock: UdpSocket
 }
 pub struct LudpNet<'a> {
-    tx: Socket_Network,
-    rx: Socket_Network,
     profile: Vec<&'a str>,
     secret: [u8; 64],
     saddr: Ipv4Addr,
@@ -59,12 +56,10 @@ pub struct LudpNet<'a> {
 }
 
 impl<'a>  LudpNet<'a> {
-    pub fn new(cast_ip: &str, rx_ip: &str, rx_udp: &str, pro_vec: Vec<&'a str>, secret: [u8; 64]) -> LudpNet<'a> {
-        let (rx_udpsock, ip4addr) = UDPsocket(&cast_ip, &rx_ip, &rx_udp);
-        let (tx_udpsock, _) = UDPsocket(&cast_ip, &pro_vec[2], &pro_vec[3]);
+    pub fn new(cast_ip: &str, pro_vec: Vec<&'a str>, secret: [u8; 64]) -> LudpNet<'a> {
+
+        let ip4addr = cast_ip.parse().unwrap();
         LudpNet {
-            tx: Socket_Network{ sock: tx_udpsock},
-            rx: Socket_Network{ sock: rx_udpsock},
             saddr: ip4addr,
             secret: secret,
             profile: pro_vec,
@@ -82,11 +77,11 @@ impl<'a>  LudpNet<'a> {
         };
     }
 
-    pub fn read_udpsocket(&mut self, _: &mut Poll, token: Token, _: Ready) {
+    pub fn read_udpsocket(&mut self, rx: &UdpSocket, _: &mut Poll, token: Token, _: Ready) {
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
-                match self.rx.sock.recv_from(&mut buf[..]) {
+                match rx.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
                         self.parse_packet(buf);
                     }
@@ -102,11 +97,11 @@ impl<'a>  LudpNet<'a> {
         }
     }
 
-    pub fn send_packet(&mut self, _: &mut Poll, token: Token, _: Ready) {
+    pub fn send_packet(&mut self, tx: &UdpSocket, _: &mut Poll, token: Token, _: Ready) {
         match token {
             SENDER => {
                 while let Some(datagram) = self.send_queue.pop_front() {
-                    match self.tx.sock.send_to(&datagram.payload, &datagram.sock_addr) {
+                    match tx.send_to(&datagram.payload, &datagram.sock_addr) {
                         Ok(Some(size)) if size == datagram.payload.len() => {}
                         Ok(Some(_)) => {
                             println!("UDP sent incomplete datagramm");
@@ -133,17 +128,24 @@ impl<'a>  LudpNet<'a> {
     /**
      * Enables the network to run event poll
      */
-    pub fn start_net(&mut self, multicastip: &str) {
+    pub fn start_net(&mut self, multicastip: &str,
+         rx_ip: &str, 
+         rx_udp: &str,
+         tx_ip: &str,
+         tx_port: &str
+         ) {
         
         let mut poll = Poll::new().unwrap();
+        let rx_udpsock = UDPsocket( &rx_ip, &rx_udp);
+        let tx_udpsock = UDPsocket(&tx_ip, &tx_port);
 
 
-        self.rx.sock.join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr).unwrap();
+        rx_udpsock.join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr).unwrap();
 
-        poll.register(&self.tx.sock, SENDER, Ready::writable(), PollOpt::edge())
+        poll.register(&tx_udpsock, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
 
-        poll.register(&self.rx.sock, LISTENER, Ready::readable(), PollOpt::edge())
+        poll.register(&rx_udpsock, LISTENER, Ready::readable(), PollOpt::edge())
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
@@ -153,19 +155,15 @@ impl<'a>  LudpNet<'a> {
             poll.poll(&mut events, None).unwrap();
             for event in &events {
                 if event.readiness().is_readable() {
-                    self.read_udpsocket(&mut poll, event.token(), event.readiness());
+                    self.read_udpsocket(&rx_udpsock, &mut poll, event.token(), event.readiness());
                 }
                 if event.readiness().is_writable() {
-                    self.send_packet(&mut poll, event.token(), event.readiness());
+                    self.send_packet(&tx_udpsock,&mut poll, event.token(), event.readiness());
                 }
             }
         }
     }
 
-    pub fn close(self) {
-        drop(self.tx);
-        drop(self.rx);
-    }
 }
 
 
@@ -210,8 +208,6 @@ mod test {
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let mut daem = LudpNet::new(
             "0.0.0.0",
-            "224.0.0.0",
-            "56733",
             vec_st,
             secret,
         );
