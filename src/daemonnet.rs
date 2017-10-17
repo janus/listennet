@@ -1,14 +1,12 @@
 use bytes::{BytesMut, Buf, BufMut};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use std::collections::VecDeque;
-use base64::{encode, decode};
-use edcert::ed25519;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
 //use std::net::UdpSocket;
 use mio::udp::*;
 use serialization;
-use types::{ENDPOINT, DATAGRAM};
+use types::{ DATAGRAM};
 
 
 const BUFFER_CAPACITY: usize = 800;
@@ -47,9 +45,12 @@ pub fn UDPsocket(cast_ip: &str, ipadr: &str, port: &str) -> (UdpSocket, Ipv4Addr
     (socket, ip4addr)
 }
 
+pub struct Socket_Network{
+    pub sock: UdpSocket
+}
 pub struct LudpNet<'a> {
-    tx: UdpSocket,
-    rx: UdpSocket,
+    tx: Socket_Network,
+    rx: Socket_Network,
     profile: Vec<&'a str>,
     secret: [u8; 64],
     saddr: Ipv4Addr,
@@ -62,8 +63,8 @@ impl<'a>  LudpNet<'a> {
         let (rx_udpsock, ip4addr) = UDPsocket(&cast_ip, &rx_ip, &rx_udp);
         let (tx_udpsock, _) = UDPsocket(&cast_ip, &pro_vec[2], &pro_vec[3]);
         LudpNet {
-            tx: tx_udpsock,
-            rx: rx_udpsock,
+            tx: Socket_Network{ sock: tx_udpsock},
+            rx: Socket_Network{ sock: rx_udpsock},
             saddr: ip4addr,
             secret: secret,
             profile: pro_vec,
@@ -85,7 +86,7 @@ impl<'a>  LudpNet<'a> {
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
-                match self.rx.recv_from(&mut buf[..]) {
+                match self.rx.sock.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
                         self.parse_packet(buf);
                     }
@@ -105,7 +106,7 @@ impl<'a>  LudpNet<'a> {
         match token {
             SENDER => {
                 while let Some(datagram) = self.send_queue.pop_front() {
-                    match self.tx.send_to(&datagram.payload, &datagram.sock_addr) {
+                    match self.tx.sock.send_to(&datagram.payload, &datagram.sock_addr) {
                         Ok(Some(size)) if size == datagram.payload.len() => {}
                         Ok(Some(_)) => {
                             println!("UDP sent incomplete datagramm");
@@ -136,23 +137,18 @@ impl<'a>  LudpNet<'a> {
         
         let mut poll = Poll::new().unwrap();
 
-        //let any = "0.0.0.0".parse().unwrap();
- 
 
-         self.rx.join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr).unwrap();
+        self.rx.sock.join_multicast_v4(&multicastip.parse().unwrap(), &self.saddr).unwrap();
 
- 
-
-        poll.register(&self.tx, SENDER, Ready::writable(), PollOpt::edge())
+        poll.register(&self.tx.sock, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
 
-        poll.register(&self.rx, LISTENER, Ready::readable(), PollOpt::edge())
+        poll.register(&self.rx.sock, LISTENER, Ready::readable(), PollOpt::edge())
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
 
         
-
         while !self.shutdown {
             poll.poll(&mut events, None).unwrap();
             for event in &events {
