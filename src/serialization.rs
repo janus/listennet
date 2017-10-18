@@ -72,7 +72,7 @@ pub fn payload(
 /**
  * This is where packet from multicat is verified(hash)   
  */
-pub fn on_ping(packet: BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Option<DATAGRAM> {
+pub fn on_ping(packet: &BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Option<DATAGRAM> {
     let vec_str: Vec<&str>;
     let payload;
     let pub_key;
@@ -89,7 +89,7 @@ pub fn on_ping(packet: BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Opti
             _ => { return None; }
         };
         if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-            match create_datagram(vec_str, profile, secret) {
+            match create_datagram(&vec_str, profile, secret) {
                 Some(v) => { return Some(v); }
                 _ => { return None;}
             };
@@ -104,7 +104,7 @@ pub fn on_ping(packet: BytesMut, profile: &Vec<&str>, secret: &[u8; 64]) -> Opti
  * 
  */
 pub fn create_datagram(
-    vec_str: Vec<&str>,
+    vec_str: &Vec<&str>,
     profile: &Vec<&str>,
     secret: &[u8; 64],
 ) -> Option<DATAGRAM> {
@@ -239,7 +239,7 @@ mod test {
         vec.push(&udp_port);
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let soc = "224.0.0.3:41235".parse().unwrap();
-        match serialization::on_ping(mbytes, &vec_st, &secret) {
+        match serialization::on_ping(&mbytes, &vec_st, &secret) {
             Some(n) => {
                 assert_eq!(n.sock_addr, soc);
             }
@@ -266,7 +266,7 @@ mod test {
         let hd = "hello_confirm";
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let rtn_pkt = serialization::payload(&vec_st.clone(), seqnum, &secret, hd);
-        match serialization::on_ping(mbytes.clone(), &vec_st, &secret) {
+        match serialization::on_ping(&mbytes, &vec_st, &secret) {
             Some(n) => {
                 assert_eq!(&n.payload[..], &rtn_pkt[..]);
             }

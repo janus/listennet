@@ -44,9 +44,6 @@ pub fn UDPsocket(ipadr: &str, port: &str) -> UdpSocket {
     socket
 }
 
-pub struct Socket_Network{
-    pub sock: UdpSocket
-}
 pub struct LudpNet<'a> {
     profile: Vec<&'a str>,
     secret: [u8; 64],
@@ -68,8 +65,8 @@ impl<'a>  LudpNet<'a> {
         }
     }
 
-    pub fn parse_packet(&mut self, buf: BytesMut) {
-        match serialization::on_ping(buf, &self.profile, &self.secret) {
+    pub fn parse_packet(&mut self, buf: &BytesMut) {
+        match serialization::on_ping(&buf, &self.profile, &self.secret) {
             Some(dgram) => {
                 self.send_queue.push_back(dgram);
             }
@@ -83,7 +80,7 @@ impl<'a>  LudpNet<'a> {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
                 match rx.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
-                        self.parse_packet(buf);
+                        self.parse_packet(&buf);
                     }
                     Ok(_) => {}
                     Err(e) => {
@@ -211,7 +208,7 @@ mod test {
             vec_st,
             secret,
         );
-        daem.parse_packet(mbytes);
+        daem.parse_packet(&mbytes);
         assert_eq!(1, daem.send_queue.len());
     }
 
