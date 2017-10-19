@@ -8,7 +8,7 @@ use types::DATAGRAM;
 
 const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
-const HELLO_CONFIRM: &'static str = "hello_confirm";
+const HELLO: &'static str = "hello";
 
 pub fn decode_key(mstr: &str) -> Vec<u8> {
     match decode(&mstr) {
@@ -48,14 +48,15 @@ pub fn decode_str(mstr: &str) -> String {
 pub fn payload(
     profile: &Vec<&str>,
     seqnum: i32,
-    secret: &[u8; 64]
+    secret: &[u8; 64],
+    hd: &str
 ) -> BytesMut {
     let sig;
     let tme = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
     let msg = format!(
         "{} {} {} {} {} {} {}",
-        HELLO_CONFIRM,
+        hd,
         profile[0],
         profile[1],
         profile[2],
@@ -123,7 +124,7 @@ pub fn create_datagram(
         }
     };
 
-    pay_load = payload(&profile, seqnum, secret);
+    pay_load = payload(&profile, seqnum, secret, HELLO);
     datagrm = DATAGRAM { sock_addr,  payload: pay_load };
     return Some(datagrm);
 }
@@ -145,8 +146,8 @@ pub fn create_sockaddr(vec_str: &Vec<&str>) -> Option<SocketAddr> {
 }
 
 pub fn match_header(packet: &BytesMut) -> bool {
-    match str::from_utf8(&packet[0..13]) {
-        Ok(v) => {return "hello_confirm" == v;}
+    match str::from_utf8(&packet[0..5]) {
+        Ok(v) => {return "hello" == v;}
         Err(e) => {
             println!("Found invalid UTF-8 {:?}", e);
             return false;
@@ -187,7 +188,7 @@ mod test {
         return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
     }
 
-    fn pong_host() -> (BytesMut, String, [u8; 64]) {
+    fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
             encodeVal("41235", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
@@ -197,20 +198,20 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let bytes = serialization::payload(&vec_st, 45, &secret);
+        let bytes = serialization::payload(&vec_st, 45, &secret, hd);
         return (bytes, pub_key.clone(), secret);
     }
 
     #[test]
     fn serialization_test_header_msg() {
-        let (mbytes, _, _) = pong_host();
+        let (mbytes, _, _) = pong_host("hello_confirm");
         let header_str = str::from_utf8(&mbytes[0..13]).expect("Found invalid UTF-8");
         assert_eq!(header_str, "hello_confirm");
     }
 
     #[test]
     fn serialization_on_pong_sockaddr() {
-        let (mbytes, pub_key, secret) = pong_host();
+        let (mbytes, pub_key, secret) = pong_host("hello");
         let (ip_addr, udp_port) = (
             encode("41235"),
             encode("224.0.0.3"),
@@ -235,7 +236,7 @@ mod test {
 
     #[test]
     fn serialization_on_pong_packet() {
-        let (mbytes, pub_key, secret) = pong_host();
+        let (mbytes, pub_key, secret) = pong_host("hello");
         let (ip_addr, udp_port) = (
             encode("41235"),
             encode("224.0.0.3"),
@@ -248,7 +249,7 @@ mod test {
         vec.push(udp_port);
         let seqnum = 45;
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let rtn_pkt = serialization::payload(&vec_st.clone(), seqnum, &secret);
+        let rtn_pkt = serialization::payload(&vec_st.clone(), seqnum, &secret,"hello");
         match serialization::on_ping(&mbytes, &vec_st, &secret) {
             Some(n) => {
                 assert_eq!(&n.payload[..], &rtn_pkt[..]);

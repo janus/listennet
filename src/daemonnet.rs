@@ -188,7 +188,7 @@ mod test {
         return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
     }
 
-    fn pong_host() -> (BytesMut, String, [u8; 64]) {
+    fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
             encodeVal("41238", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
@@ -198,13 +198,13 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let bytes = serialization::payload(&vec_st, 45, &secret);
+        let bytes = serialization::payload(&vec_st, 45, &secret, hd);
         return (bytes, pub_key.clone(), secret);
     }
 
     #[test]
     fn test_udp_socket_send_recv() {
-        let (mbytes, pub_key, secret) = pong_host();
+        let (mbytes, pub_key, secret) = pong_host("hello");
         let cloned_pub_key = pub_key.clone();
         let mut vec = Vec::new();
         vec.push(pub_key);
@@ -223,7 +223,7 @@ mod test {
 
     #[test]
     fn daemonnet_send_packet() {
-        let (_, pub_key, secret) = pong_host();
+        let (_, pub_key, secret) = pong_host("hello");
         daemon_net(
             "0.0.0.0",
             "224.0.0.3",
