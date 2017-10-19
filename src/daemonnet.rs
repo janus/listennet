@@ -13,6 +13,15 @@ const BUFFER_CAPACITY: usize = 800;
 const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
+/**
+ * This is the only function that one needs to call
+ * It runs forever that means that it would be on its on thread
+ * Once this function is called the udpsocket is started, it would join
+ * a multicast, and listens to incoming packets. Any packet with correct
+ * protocol would be accepted, and parsed. And it would extract destination
+ * end point from the packet. With this end point it would send respond containing
+ * its payment address , public key, sequence number,...
+ */
 fn daemon_net(
     cast_ip: &str,
     rx_ip: &str,
@@ -189,7 +198,7 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let bytes = serialization::payload(&vec_st, 45, &secret, "hello_confirm");
+        let bytes = serialization::payload(&vec_st, 45, &secret);
         return (bytes, pub_key.clone(), secret);
     }
 
