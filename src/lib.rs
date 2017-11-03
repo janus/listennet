@@ -10,12 +10,6 @@ extern crate time;
 mod daemonnet;
 mod serialization;
 mod types;
+mod dsocket;
 
 
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-    }
-}
