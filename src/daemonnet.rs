@@ -38,23 +38,29 @@ const SENDER: Token = Token(1);
  *  "42239",
  * tx_udpsock,
  * rx_udpsock,
- * serialization::parse_packet,
+ * serialization::on_ping,
  *   secret,
  * );
  *       
  */
+
+fn build_profile<'a>(ip_address: &'a str,udp_port: &'a str,pub_key: &'a str,
+pay_addr: &'a str )->PROFILE<'a>{
+    let endpoint = ENDPOINT {ip_address, udp_port: udp_port};
+    PROFILE {
+        pub_key,
+        pay_addr,
+        endpoint
+    }
+}
+
 fn daemon_net(
-    pub_key: &str,
-    pay_addr: &str,
-    tx_ip: &str,
-    tx_port: &str,
+    profile: PROFILE,
     tx: UdpSocket,
     rx: UdpSocket,
     callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
     secret: [u8; 64],
 ) {
-    let endpoint = ENDPOINT{ip_address: tx_ip, udp_port: tx_port };
-    let profile = PROFILE {pub_key, pay_addr, endpoint};
     let mut ludpnet = LudpNet::new(profile, secret);
     ludpnet.start_net(tx, rx, callback);
 }
@@ -81,7 +87,7 @@ impl<'a>  LudpNet<'a> {
     pub fn read_udpsocket(
         &mut self,
         rx: &UdpSocket, 
-        parser: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
         _: &mut Poll, 
         token: Token, 
         _: Ready) {
@@ -90,7 +96,7 @@ impl<'a>  LudpNet<'a> {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
                 match rx.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
-                        match parser(&buf,&self.profile, &self.secret ) {
+                        match callback(&buf,&self.profile, &self.secret ) {
                             Some(dgram) => {
                             self.send_queue.push_back(dgram);
                             }
@@ -142,7 +148,7 @@ impl<'a>  LudpNet<'a> {
         &mut self, 
         tx: UdpSocket, 
         rx: UdpSocket,
-        f: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>){
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>){
 
         let mut poll = Poll::new().unwrap();
 
@@ -159,7 +165,7 @@ impl<'a>  LudpNet<'a> {
             poll.poll(&mut events, None).unwrap();
             for event in &events {
                 if event.readiness().is_readable() {
-                    self.read_udpsocket(&rx, f, &mut poll, event.token(), event.readiness());
+                    self.read_udpsocket(&rx, callback, &mut poll, event.token(), event.readiness());
                 }
                 if event.readiness().is_writable() {
                     self.send_packet(&tx, &mut poll, event.token(), event.readiness());
@@ -198,6 +204,7 @@ mod test {
             endpoint
         }
     }
+
     fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
             encodeVal("41238", "224.0.0.3");
@@ -217,7 +224,7 @@ mod test {
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         //let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let mut daem = LudpNet::new(profile,secret);
-        serialization::parse_packet(&mbytes, &daem.profile, &daem.secret);
+        serialization::on_ping(&mbytes, &daem.profile, &daem.secret);
         assert_eq!(0, daem.send_queue.len());
     }
 
@@ -230,14 +237,13 @@ mod test {
         rx_udpsock.join_multicast_v4(&"227.1.1.100".parse().unwrap(), &saddr).unwrap();
 
         let (_, pub_key, secret) = pong_host("hello");
+        let cloned_pub_key = pub_key.clone();
+        let profile = build_profile("224.0.0.4", "42239", &pub_key, &cloned_pub_key);
         daemon_net(
-            &pub_key.clone(),
-            &pub_key,
-            "224.0.0.4",
-            "42239",
+            profile,
             tx_udpsock,
             rx_udpsock,
-            serialization::parse_packet,
+            serialization::on_ping,
             secret,
         );
     }
