@@ -44,14 +44,14 @@ const SENDER: Token = Token(1);
  *       
  */
 
-fn build_profile<'a>(ip_address: &'a str,udp_port: &'a str,pub_key: &'a str,
-pay_addr: &'a str )->PROFILE<'a>{
+fn build_profile<'a>(
+    ip_address: &'a str,
+    udp_port: &'a str,
+    pub_key: &'a str,
+    pay_addr: &'a str 
+)->PROFILE<'a> {
     let endpoint = ENDPOINT {ip_address, udp_port: udp_port};
-    PROFILE {
-        pub_key,
-        pay_addr,
-        endpoint
-    }
+    PROFILE {pub_key, pay_addr,endpoint}
 }
 
 fn daemon_net(
@@ -75,7 +75,6 @@ pub struct LudpNet<'a> {
 
 impl<'a>  LudpNet<'a> {
     pub fn new(profile: PROFILE<'a>, secret: [u8; 64]) -> LudpNet<'a> {
-
         LudpNet {
             secret,
             profile,
@@ -90,7 +89,8 @@ impl<'a>  LudpNet<'a> {
         callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
         _: &mut Poll, 
         token: Token, 
-        _: Ready) {
+        _: Ready
+    ) {
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
@@ -148,10 +148,9 @@ impl<'a>  LudpNet<'a> {
         &mut self, 
         tx: UdpSocket, 
         rx: UdpSocket,
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>){
-
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>
+    ){
         let mut poll = Poll::new().unwrap();
-
         poll.register(&tx, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
 
@@ -159,7 +158,6 @@ impl<'a>  LudpNet<'a> {
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
-
         
         while !self.shutdown {
             poll.poll(&mut events, None).unwrap();
@@ -188,6 +186,8 @@ mod test {
     use daemonnet::{LudpNet, daemon_net};
     use dsocket::UDPsocket;
     use std::net::Ipv4Addr;
+    use handle::handler;
+
 
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
@@ -195,8 +195,12 @@ mod test {
         return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
     }
 
-    fn build_profile<'a>(ip_address: &'a str,udp_port: &'a str,pub_key: &'a str,
-    pay_addr: &'a str )->PROFILE<'a>{
+    fn build_profile<'a>(
+        ip_address: &'a str,
+        udp_port: &'a str,
+        pub_key: &'a str,
+        pay_addr: &'a str 
+    )->PROFILE<'a>{
         let endpoint = ENDPOINT {ip_address, udp_port: udp_port};
         PROFILE {
             pub_key,
@@ -224,7 +228,7 @@ mod test {
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         //let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
         let mut daem = LudpNet::new(profile,secret);
-        serialization::on_ping(&mbytes, &daem.profile, &daem.secret);
+        handler(&mbytes, &daem.profile, &daem.secret);
         assert_eq!(0, daem.send_queue.len());
     }
 
@@ -243,7 +247,7 @@ mod test {
             profile,
             tx_udpsock,
             rx_udpsock,
-            serialization::on_ping,
+            handler,
             secret,
         );
     }

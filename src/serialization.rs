@@ -69,36 +69,7 @@ pub fn payload(profile: &PROFILE, seqnum: i32, secret: &[u8; 64], hd: &str) -> B
 }
 
 
-//pub fn parse_packet(buf: &BytesMut, profile: &PROFILE,secret: &[u8; 64] )->Option<DATAGRAM> {
-//    on_ping(&buf, &profile, &secret)
-//}
-/**
- * This is where packet from multicast is verified(hash) by ed25519 curve   
- */
-pub fn on_ping(packet: &BytesMut, profile: &PROFILE, secret: &[u8; 64]) -> Option<DATAGRAM> {
-    let vec_str: Vec<&str>;
-    let payload;
-    let pub_key;
-    let sig;
-    if check_size(&packet) && match_header(&packet) {
-        vec_str = bytes_vec(&packet);
-        payload = extract_payload(&vec_str);
-        pub_key = decode_key(&vec_str[1]);
-        sig = decode_key(&vec_str[vec_str.len() - 1]);
 
-        if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-            match hello_reply_datagram(&vec_str, profile, secret) {
-                Some(v) => {
-                    return Some(v);
-                }
-                _ => {
-                    return None;
-                }
-            };
-        }
-    }
-    return None;
-}
 /**
  * Returns either nothing or a struct Datagram, which contains
  * endpoint address and packet to be sent
@@ -152,23 +123,8 @@ pub fn create_sockaddr(vec_str: &Vec<&str>) -> Option<SocketAddr> {
     return Some(saddr);
 }
 
-pub fn match_header(packet: &BytesMut) -> bool {
-    match str::from_utf8(&packet[0..5]) {
-        Ok(v) => {
-            return HELLO == v;
-        }
-        Err(e) => {
-            println!("Found invalid UTF-8 {:?}", e);
-            return false;
-        }
-    };
-}
 
-pub fn check_size(packet: &BytesMut) -> bool {
-    packet.len() > 200
-}
-
-fn bytes_vec(packet: &BytesMut) -> Vec<&str> {
+pub fn bytes_vec(packet: &BytesMut) -> Vec<&str> {
     let str_buf = match str::from_utf8(&packet[..]) {
         Ok(v) => v,
         Err(e) => {
@@ -179,7 +135,7 @@ fn bytes_vec(packet: &BytesMut) -> Vec<&str> {
     str_buf.split_whitespace().collect()
 }
 
-fn extract_payload(vec: &Vec<&str>) -> String {
+pub fn extract_payload(vec: &Vec<&str>) -> String {
     vec[0..7].join(" ")
 }
 
@@ -192,6 +148,7 @@ mod test {
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
     use types::{DATAGRAM, PROFILE, ENDPOINT};
+    use handle::handler;
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();
@@ -238,7 +195,7 @@ mod test {
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         let soc = "224.0.0.3:41235".parse().unwrap();
-        match serialization::on_ping(&mbytes, &profile, &secret) {
+        match handler(&mbytes, &profile, &secret) {
             Some(n) => {
                 assert_eq!(n.sock_addr, soc);
             }
@@ -256,7 +213,7 @@ mod test {
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         let seqnum = 45;
         let rtn_pkt = serialization::payload(&profile, seqnum, &secret, "hello");
-        match serialization::on_ping(&mbytes, &profile, &secret) {
+        match handler(&mbytes, &profile, &secret) {
             Some(n) => {
                 assert_eq!(&n.payload[0..5], &rtn_pkt[0..5]);
             }
