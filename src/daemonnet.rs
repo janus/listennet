@@ -3,9 +3,7 @@ use mio::{Events, Poll, PollOpt, Ready, Token};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
-//use std::net::UdpSocket;
 use mio::udp::*;
-use serialization;
 use types::{ DATAGRAM, PROFILE, ENDPOINT};
 
 
@@ -44,26 +42,6 @@ const SENDER: Token = Token(1);
  *       
  */
 
-fn build_profile<'a>(
-    ip_address: &'a str,
-    udp_port: &'a str,
-    pub_key: &'a str,
-    pay_addr: &'a str 
-)->PROFILE<'a> {
-    let endpoint = ENDPOINT {ip_address, udp_port: udp_port};
-    PROFILE {pub_key, pay_addr,endpoint}
-}
-
-fn daemon_net(
-    profile: PROFILE,
-    tx: UdpSocket,
-    rx: UdpSocket,
-    callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
-    secret: [u8; 64],
-) {
-    let mut ludpnet = LudpNet::new(profile, secret);
-    ludpnet.start_net(tx, rx, callback);
-}
 
 
 pub struct LudpNet<'a> {
@@ -96,20 +74,17 @@ impl<'a>  LudpNet<'a> {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
                 match rx.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
-                        match callback(&buf,&self.profile, &self.secret ) {
-                            Some(dgram) => {
+                        if let Some(dgram) = callback(&buf, &self.profile, &self.secret ) {
                             self.send_queue.push_back(dgram);
-                            }
-                            _ => {}
-                        };
+                        }
                     }
-                    Ok(_) => {}
+                    Ok(_) => {},
                     Err(e) => { println!("Error reading UDP packet: {:?}", e);}
                 };
                 self.shutdown = true;
                 //comment out when in production mode
             }
-            _ => (),
+            _ => {},
         }
     }
 
@@ -120,18 +95,18 @@ impl<'a>  LudpNet<'a> {
                     match tx.send_to(&datagram.payload, &datagram.sock_addr) {
                         Ok(Some(size)) if size == datagram.payload.len() => {}
                         Ok(Some(_)) => {
-                            println!("UDP sent incomplete datagram");
+                            //println!("UDP sent incomplete datagram");
                             self.send_queue.push_front(datagram);
                         }
                         Ok(None) => {
                             self.send_queue.push_front(datagram);
                         }
                         Err(e) => {
-                            println!(
-                                "Error send UDP:: {:?} and the sock_addr is {:?}",
-                                e,
-                                &datagram.sock_addr
-                            );
+                           // println!(
+                            //    "Error send UDP:: {:?} and the sock_addr is {:?}",
+                            //    e,
+                            //    &datagram.sock_addr
+                           // );
                             return;
                         }
                     };
@@ -183,12 +158,22 @@ mod test {
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
     use types::{DATAGRAM,PROFILE, ENDPOINT};
-    use daemonnet::{LudpNet, daemon_net};
+    use daemonnet::{LudpNet};
     use dsocket::UDPsocket;
     use std::net::Ipv4Addr;
     use handle::handler;
+    use mio::udp::*;
 
-
+	fn daemon_net(
+		profile: PROFILE,
+		tx: UdpSocket,
+		rx: UdpSocket,
+		callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
+		secret: [u8; 64],
+	) {
+		let mut ludpnet = LudpNet::new(profile, secret);
+		ludpnet.start_net(tx, rx, callback);
+	}
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();

@@ -1,53 +1,41 @@
-use serialization::{bytes_vec,extract_payload,hello_reply_datagram,decode_key};
+use serialization::{from_bytes,extract_payload,hello_reply_datagram,decode_key,decode_str};
 use bytes::{BufMut, BytesMut};
 use std::str;
 use edcert::ed25519;
-use types::{DATAGRAM, PROFILE};
+use types::{DATAGRAM, PROFILE, NETWORK_DATA};
 
 const HELLO: &'static str = "hello";
 
-//pub fn parse_packet(buf: &BytesMut, profile: &PROFILE,secret: &[u8; 64] )->Option<DATAGRAM> {
-//    on_ping(&buf, &profile, &secret)
-//}
+
 /**
  * This is where packet from multicast is verified(hash) by ed25519 curve   
  */
 pub fn handler(packet: &BytesMut, profile: &PROFILE, secret: &[u8; 64]) -> Option<DATAGRAM> {
-    let vec_str: Vec<&str>;
-    let payload;
-    let pub_key;
-    let sig;
     if check_size(&packet) && match_header(&packet) {
-        vec_str = bytes_vec(&packet);
-        payload = extract_payload(&vec_str);
-        pub_key = decode_key(&vec_str[1]);
-        sig = decode_key(&vec_str[vec_str.len() - 1]);
+		if let Some(net_data) = from_bytes(&packet) {
+			let payload = extract_payload(&net_data);
+			let pub_key = decode_key(&net_data.pub_key);
+			let sig = decode_key(&net_data.sig);
 
-        if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-            match hello_reply_datagram(&vec_str, profile, secret) {
-                Some(v) => {
-                    return Some(v);
-                }
-                _ => {
-                    return None;
-                }
-            };
-        }
+			if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
+				if let Some(v) =  hello_reply_datagram(&net_data, profile, secret, packet.len() as i32) {
+					return Some(v);
+				}
+			}	
+		}
     }
-    return None;
+    None
 }
 
 pub fn match_header(packet: &BytesMut) -> bool {
-    match str::from_utf8(&packet[0..5]) {
-        Ok(v) => {
-            return HELLO == v;
-        }
-        Err(e) => {
-            println!("Found invalid UTF-8 {:?}", e);
-            return false;
-        }
-    };
+	if let Ok(v) = str::from_utf8(&packet[0..5]){
+		return HELLO == v;
+	}
+	
+	//println!("Found invalid UTF-8");
+	false
 }
+
 
 pub fn check_size(packet: &BytesMut) -> bool {
     packet.len() > 200

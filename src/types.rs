@@ -18,3 +18,13 @@ pub struct PROFILE<'a> {
     pub endpoint:  ENDPOINT<'a>,
 }
 
+pub struct NETWORK_DATA {
+	pub hd:  String,
+	pub udp_port:  String,
+    pub pub_key: String,
+    pub pay_addr: String,
+    pub seqnum: String,
+    pub tme: String,
+    pub ip_address: String,
+    pub sig: String,
+}
