@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
 use mio::udp::*;
-use types::{ DATAGRAM, PROFILE, ENDPOINT};
+use types::{DATAGRAM, PROFILE, ENDPOINT};
 
 
 const BUFFER_CAPACITY: usize = 800;
@@ -39,7 +39,7 @@ const SENDER: Token = Token(1);
  * serialization::on_ping,
  *   secret,
  * );
- *       
+ *
  */
 
 
@@ -51,7 +51,7 @@ pub struct LudpNet<'a> {
     pub send_queue: VecDeque<DATAGRAM>,
 }
 
-impl<'a>  LudpNet<'a> {
+impl<'a> LudpNet<'a> {
     pub fn new(profile: PROFILE<'a>, secret: [u8; 64]) -> LudpNet<'a> {
         LudpNet {
             secret,
@@ -63,28 +63,30 @@ impl<'a>  LudpNet<'a> {
 
     pub fn read_udpsocket(
         &mut self,
-        rx: &UdpSocket, 
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
-        _: &mut Poll, 
-        token: Token, 
-        _: Ready
+        rx: &UdpSocket,
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+        _: &mut Poll,
+        token: Token,
+        _: Ready,
     ) {
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
                 match rx.recv_from(&mut buf[..]) {
                     Ok(Some((_, _))) => {
-                        if let Some(dgram) = callback(&buf, &self.profile, &self.secret ) {
+                        if let Some(dgram) = callback(&buf, &self.profile, &self.secret) {
                             self.send_queue.push_back(dgram);
                         }
                     }
-                    Ok(_) => {},
-                    Err(e) => { println!("Error reading UDP packet: {:?}", e);}
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Error reading UDP packet: {:?}", e);
+                    }
                 };
                 self.shutdown = true;
                 //comment out when in production mode
             }
-            _ => {},
+            _ => {}
         }
     }
 
@@ -102,11 +104,11 @@ impl<'a>  LudpNet<'a> {
                             self.send_queue.push_front(datagram);
                         }
                         Err(e) => {
-                           // println!(
+                            // println!(
                             //    "Error send UDP:: {:?} and the sock_addr is {:?}",
                             //    e,
                             //    &datagram.sock_addr
-                           // );
+                            // );
                             return;
                         }
                     };
@@ -120,11 +122,11 @@ impl<'a>  LudpNet<'a> {
      * Enables the network to run event poll
      */
     pub fn start_net(
-        &mut self, 
-        tx: UdpSocket, 
+        &mut self,
+        tx: UdpSocket,
         rx: UdpSocket,
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>
-    ){
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+    ) {
         let mut poll = Poll::new().unwrap();
         poll.register(&tx, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
@@ -133,7 +135,7 @@ impl<'a>  LudpNet<'a> {
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
-        
+
         while !self.shutdown {
             poll.poll(&mut events, None).unwrap();
             for event in &events {
@@ -146,7 +148,6 @@ impl<'a>  LudpNet<'a> {
             }
         }
     }
-
 }
 
 
@@ -157,23 +158,23 @@ mod test {
     use edcert::ed25519;
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
-    use types::{DATAGRAM,PROFILE, ENDPOINT};
-    use daemonnet::{LudpNet};
+    use types::{DATAGRAM, PROFILE, ENDPOINT};
+    use daemonnet::LudpNet;
     use dsocket::UDPsocket;
     use std::net::Ipv4Addr;
     use handle::handler;
     use mio::udp::*;
 
-	fn daemon_net(
-		profile: PROFILE,
-		tx: UdpSocket,
-		rx: UdpSocket,
-		callback: fn(&BytesMut, &PROFILE, &[u8; 64])->Option<DATAGRAM>,
-		secret: [u8; 64],
-	) {
-		let mut ludpnet = LudpNet::new(profile, secret);
-		ludpnet.start_net(tx, rx, callback);
-	}
+    fn daemon_net(
+        profile: PROFILE,
+        tx: UdpSocket,
+        rx: UdpSocket,
+        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+        secret: [u8; 64],
+    ) {
+        let mut ludpnet = LudpNet::new(profile, secret);
+        ludpnet.start_net(tx, rx, callback);
+    }
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();
@@ -184,19 +185,21 @@ mod test {
         ip_address: &'a str,
         udp_port: &'a str,
         pub_key: &'a str,
-        pay_addr: &'a str 
-    )->PROFILE<'a>{
-        let endpoint = ENDPOINT {ip_address, udp_port: udp_port};
+        pay_addr: &'a str,
+    ) -> PROFILE<'a> {
+        let endpoint = ENDPOINT {
+            ip_address,
+            udp_port: udp_port,
+        };
         PROFILE {
             pub_key,
             pay_addr,
-            endpoint
+            endpoint,
         }
     }
 
     fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
-        let (ip_addr, udp_port, pub_key, secret) =
-            encodeVal("41238", "224.0.0.3");
+        let (ip_addr, udp_port, pub_key, secret) = encodeVal("41238", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         //let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
@@ -208,11 +211,11 @@ mod test {
     fn test_udp_socket_send_recv() {
         let (mbytes, pub_key, secret) = pong_host("hello");
         let cloned_pub_key = pub_key.clone();
-        let ip_addr = "224.0.0.3"; 
-        let udp_port =  "41215";
+        let ip_addr = "224.0.0.3";
+        let udp_port = "41215";
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         //let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let mut daem = LudpNet::new(profile,secret);
+        let mut daem = LudpNet::new(profile, secret);
         handler(&mbytes, &daem.profile, &daem.secret);
         assert_eq!(0, daem.send_queue.len());
     }
@@ -223,18 +226,14 @@ mod test {
         let tx_udpsock = UDPsocket("224.0.0.4", "42239");
 
         let saddr: Ipv4Addr = "0.0.0.0".parse().unwrap();
-        rx_udpsock.join_multicast_v4(&"227.1.1.100".parse().unwrap(), &saddr).unwrap();
+        rx_udpsock
+            .join_multicast_v4(&"227.1.1.100".parse().unwrap(), &saddr)
+            .unwrap();
 
         let (_, pub_key, secret) = pong_host("hello");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile("224.0.0.4", "42239", &pub_key, &cloned_pub_key);
-        daemon_net(
-            profile,
-            tx_udpsock,
-            rx_udpsock,
-            handler,
-            secret,
-        );
+        daemon_net(profile, tx_udpsock, rx_udpsock, handler, secret);
     }
 
 }

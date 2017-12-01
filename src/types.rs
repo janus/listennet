@@ -14,13 +14,13 @@ pub struct DATAGRAM {
 
 pub struct PROFILE<'a> {
     pub pub_key: &'a str,
-    pub pay_addr:  &'a str,
-    pub endpoint:  ENDPOINT<'a>,
+    pub pay_addr: &'a str,
+    pub endpoint: ENDPOINT<'a>,
 }
 
 pub struct NETWORK_DATA {
-	pub hd:  String,
-	pub udp_port:  String,
+    pub hd: String,
+    pub udp_port: String,
     pub pub_key: String,
     pub pay_addr: String,
     pub seqnum: String,

@@ -20,7 +20,7 @@ pub fn create_sockaddr(net_data: &NETWORK_DATA) -> Option<SocketAddr> {
     let port = decode_str(&net_data.udp_port);
     let addr = format!("{}:{}", ip_address, port);
     if let Ok(saddr) = addr.parse::<SocketAddr>() {
-		return Some(saddr);
+        return Some(saddr);
     }
     //println!("Failed to parse SocketAddr");
     None

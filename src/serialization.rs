@@ -17,7 +17,7 @@ const HELLO_CONFIRM: &'static str = "hello_confirm";
 
 
 pub fn decode_key(mstr: &str) -> Vec<u8> {
-    if let Ok(v) =  decode(&mstr) {
+    if let Ok(v) = decode(&mstr) {
         return v;
     }
     return Vec::new();
@@ -25,20 +25,20 @@ pub fn decode_key(mstr: &str) -> Vec<u8> {
 
 pub fn decode_str(mstr: &str) -> String {
     if let Ok(v) = decode(&mstr) {
-		if let Ok(vv) = String::from_utf8(v) {
-			return vv; 
-		}		
+        if let Ok(vv) = String::from_utf8(v) {
+            return vv;
+        }
     }
     return "".to_string();
 }
 
-/**
+#[doc = /**
  * Builds the packet.. It is a BytesMut
- */
+ */]
 pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) -> BytesMut {
     let tme = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
-    
+
     let mut msg = format!(
         "{} {} {} {} {} {} {}",
         hd,
@@ -57,56 +57,56 @@ pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) ->
 }
 
 
-/**
+#[doc = /**
  * Returns either nothing or a struct Datagram, which contains
  * endpoint address and packet to be sent
- * 
- */
+ *
+ */]
 pub fn hello_reply_datagram(
     net_data: &NETWORK_DATA,
     profile: &PROFILE,
     secret: &[u8; 64],
-    seqnum: i32
+    seqnum: i32,
 ) -> Option<DATAGRAM> {
-	
+
     if let Some(sock_addr) = create_sockaddr(&net_data) {
-		if let Ok(net_seqnum) = net_data.seqnum.parse::<i32>() {
-			let mut total_seqnum  = net_seqnum + seqnum;
-			let datagrm = DATAGRAM {
-				sock_addr,
-				payload: payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM),
-			};
-			return Some(datagrm);
-		}
+        if let Ok(net_seqnum) = net_data.seqnum.parse::<i32>() {
+            let mut total_seqnum = net_seqnum + seqnum;
+            let datagrm = DATAGRAM {
+                sock_addr,
+                payload: payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM),
+            };
+            return Some(datagrm);
+        }
     }
     None
 }
 
 
 pub fn from_bytes(packet: &BytesMut) -> Option<NETWORK_DATA> {
-    if let Ok(str_buf) = str::from_utf8(&packet[..]){
-		let vec: Vec<&str> = str_buf.split_whitespace().collect();
-		if vec.len() == VEC_LEN {
-			let network_data = NETWORK_DATA {
-				hd: vec[0].to_string(),
-				pub_key: vec[1].to_string(),
-				pay_addr: vec[2].to_string(),
-				ip_address: vec[3].to_string(),
-				udp_port: vec[4].to_string(),
-				tme: vec[5].to_string(),
-				seqnum: vec[6].to_string(),
-				sig: vec[7].to_string()
-			};
-			return Some(network_data);
-		}
-	}
+    if let Ok(str_buf) = str::from_utf8(&packet[..]) {
+        let vec: Vec<&str> = str_buf.split_whitespace().collect();
+        if vec.len() == VEC_LEN {
+            let network_data = NETWORK_DATA {
+                hd: vec[0].to_string(),
+                pub_key: vec[1].to_string(),
+                pay_addr: vec[2].to_string(),
+                ip_address: vec[3].to_string(),
+                udp_port: vec[4].to_string(),
+                tme: vec[5].to_string(),
+                seqnum: vec[6].to_string(),
+                sig: vec[7].to_string(),
+            };
+            return Some(network_data);
+        }
+    }
     None
 }
 
 pub fn extract_payload(net_data: &NETWORK_DATA) -> String {
     format!(
-		"{} {} {} {} {} {} {}",
-		net_data.hd,
+        "{} {} {} {} {} {} {}",
+        net_data.hd,
         net_data.pub_key,
         net_data.pay_addr,
         net_data.ip_address,
@@ -148,7 +148,7 @@ mod test {
             endpoint,
         }
     }
-    
+
     fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
