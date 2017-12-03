@@ -1,4 +1,4 @@
-use serialization::{from_bytes, extract_payload, hello_reply_datagram,  decode_str};
+use serialization::{from_bytes, extract_payload, hello_reply_datagram, decode_str};
 use bytes::{BufMut, BytesMut};
 use std::str;
 use edcert::ed25519;
@@ -8,9 +8,9 @@ use types::{DATAGRAM, PROFILE, NETWORK_DATA};
 const HELLO: &'static str = "hello";
 
 
-/**
+#[doc = /**
  * This is where packet from multicast is verified(hash) by ed25519 curve
- */
+ */]
 pub fn handler(packet: &BytesMut, profile: &PROFILE, secret: &[u8; 64]) -> Option<DATAGRAM> {
     if check_size(&packet) && match_header(&packet) {
         if let Some(net_data) = from_bytes(&packet) {

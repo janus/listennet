@@ -26,9 +26,9 @@ pub fn decode_str(mstr: &str) -> String {
     return "".to_string();
 }
 
-/**
+#[doc = /**
  * Builds the packet.. It is a BytesMut
- */
+ */]
 pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) -> BytesMut {
     let tme = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
@@ -51,11 +51,11 @@ pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) ->
 }
 
 
-/**
+#[doc = /**
  * Returns either nothing or a struct Datagram, which contains
  * endpoint address and packet to be sent
  *
- */
+ */]
 pub fn hello_reply_datagram(
     net_data: &NETWORK_DATA,
     profile: &PROFILE,

@@ -15,7 +15,7 @@ const SENDER: Token = Token(1);
 
 //const DEFAULT_SOCKET: usize = 0;
 
-/**
+#[doc = /**
  * Why using mio? It has non-block feasture enabled.
  * This is the only function that one needs to call
  * It runs forever that means that it would be on its on thread
@@ -40,7 +40,7 @@ const SENDER: Token = Token(1);
  *   secret,
  * );
  *
- */
+ */]
 
 
 
@@ -118,9 +118,9 @@ impl<'a> LudpNet<'a> {
         }
     }
 
-    /**
+    #[doc = /**
      * Enables the network to run event poll
-     */
+     */]
     pub fn start_net(
         &mut self,
         tx: UdpSocket,
@@ -207,13 +207,13 @@ mod test {
         let bytes = serialization::payload(&profile, 45, &secret, hd);
         return (bytes, pub_key.clone(), secret);
     }
-    
+
     fn header(packet: &BytesMut) -> String {
-		if let Ok(v) = str::from_utf8(&packet[0..13]) {
-			return v.to_string();
-		}
-		"".to_string()
-	}
+        if let Ok(v) = str::from_utf8(&packet[0..13]) {
+            return v.to_string();
+        }
+        "".to_string()
+    }
 
     #[test]
     fn test_udp_socket_send_recv() {
@@ -222,7 +222,7 @@ mod test {
         let ip_addr = "224.0.0.3";
         let udp_port = "41215";
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        
+
         let mut daem = LudpNet::new(profile, secret);
         handler(&mbytes, &daem.profile, &daem.secret);
         assert_eq!(0, daem.send_queue.len());
@@ -243,66 +243,99 @@ mod test {
         let profile = build_profile("224.0.0.4", "42238", &pub_key, &cloned_pub_key);
         daemon_net(profile, tx_udpsock, rx_udpsock, handler, secret);
     }
-    
+
     #[test]
     fn test_received_packet() {
-		        
-		let hd = "hello";
-		let pub_key = "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=";
-		let pay_addr =  "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
-		let ip_address = "224.0.0.4";
-		let udp_port = "42238";
-		let tme = "1512275605";
-		let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
-		let seqnum = 89;
-		
 
-		
-		let mut rslt = BytesMut::with_capacity(1400);    
-		
-		let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s= AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
-		
-		rslt.put(nt_packet);
-		
-		let nt_data: NETWORK_DATA = serialization::from_bytes(&rslt).unwrap();
-		
-		assert_eq!(nt_data.hd, "hello");
-		assert_eq!(nt_data.pub_key, "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=");
-		assert_eq!(nt_data.pay_addr, pay_addr);
-		assert_eq!(serialization::decode_str(&nt_data.ip_address), ip_address);
-		assert_eq!(serialization::decode_str(&nt_data.udp_port), udp_port);
-		assert_eq!(nt_data.tme, tme);
-		assert_eq!(nt_data.sig, sig);
-		
-	}
-	
-	#[test]
+        let hd = "hello";
+        let pub_key = "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=";
+
+        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17Sbrm
+        TIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h
+        9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V
+        6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX
+        88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+
+        gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
+
+        let ip_address = "224.0.0.4";
+        let udp_port = "42238";
+        let tme = "1512275605";
+        let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70
+        nMgBMwT3eCheSpstx1o4QCw==";
+        let seqnum = 89;
+
+
+
+        let mut rslt = BytesMut::with_capacity(1400);
+
+        let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s= AAAAB3NzaC1yc2E
+        AAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew
+        18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR
+        +HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsnc
+        M1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+
+        AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSs
+        bxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 OhWwXXH7e2O7YF
+        k5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
+
+        rslt.put(nt_packet);
+
+        let nt_data: NETWORK_DATA = serialization::from_bytes(&rslt).unwrap();
+
+        assert_eq!(nt_data.hd, "hello");
+        assert_eq!(
+            nt_data.pub_key,
+            "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s="
+        );
+        assert_eq!(nt_data.pay_addr, pay_addr);
+        assert_eq!(serialization::decode_str(&nt_data.ip_address), ip_address);
+        assert_eq!(serialization::decode_str(&nt_data.udp_port), udp_port);
+        assert_eq!(nt_data.tme, tme);
+        assert_eq!(nt_data.sig, sig);
+
+    }
+
+    #[test]
     fn test_process_received_packet() {
-		  
-		let (ip_addr, udp_port, pub_key, secret) = encodeVal("41238", "224.0.0.3");
-        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
+
+        let (ip_addr, udp_port, pub_key, secret) = encodeVal("41238", "224.0.0.3");
+        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tj
+        om/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QV
+        kbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HA
+        o3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+
+        3V0Ww68/eIFmb1zuUFljQJKprr
+        X88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il
+        8b+gw3r3+1nKatmIkjn2so1d01QraTl
+        MqVSsbxNrRFi9wrf+M7Q==";
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &pay_addr);
-		        
 
 
-		
-		let mut rslt = BytesMut::with_capacity(1400);    
-		
-		let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s= AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 4qBNrBNA9wdMxfmUZxL9kP+X/1wFzgSeWkoN4TXs7YdkWA0VIWGqRGEe8Czw1M/gwd1xk1P6egp+deQ6STejBg==";
-		
-		rslt.put(nt_packet);
-		
-		
-       let datagram = handler(&rslt, &profile, &secret).unwrap();
-       //println!("{:?}", datagram);
-       assert_eq!(header(&datagram.payload), "hello_confirm");
-       
+
+
+        let mut rslt = BytesMut::with_capacity(1400);
+
+        let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s
+        = AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafz
+        lHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda
+        3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6Rj
+		sNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby
+		6vw/Pb0rwert/EnmZ+
+		AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q
+		== MjI0LjAuMC40 NDIyMzg= 1512275605 89
+		 4qBNrBNA9wdMxfmUZxL9kP+X/1wFzgSeWkoN4TXs7YdkWA0VIWGqRGEe8Czw1M/gwd1xk1P6egp+deQ6STejBg==";
+
+        rslt.put(nt_packet);
+
+
+        let datagram = handler(&rslt, &profile, &secret).unwrap();
+        //println!("{:?}", datagram);
+        assert_eq!(header(&datagram.payload), "hello_confirm");
+
         let nt_data: NETWORK_DATA = serialization::from_bytes(&datagram.payload).unwrap();
         assert_eq!(serialization::decode_str(&nt_data.ip_address), "224.0.0.3");
-		assert_eq!(serialization::decode_str(&nt_data.udp_port), "41238");
-		
-	}
-	
+        assert_eq!(serialization::decode_str(&nt_data.udp_port), "41238");
+
+    }
+
 
 
 }
