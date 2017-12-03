@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use types::{DATAGRAM, PROFILE, NETWORK_DATA};
 use dsocket::create_sockaddr;
 
-const BUFFER_CAPACITY_MESSAGE: usize = 400;
+const BUFFER_CAPACITY_MESSAGE: usize = 1300;
 
 const VEC_LEN: usize = 8;
 
@@ -16,12 +16,6 @@ const HELLO: &'static str = "hello";
 const HELLO_CONFIRM: &'static str = "hello_confirm";
 
 
-pub fn decode_key(mstr: &str) -> Vec<u8> {
-    if let Ok(v) = decode(&mstr) {
-        return v;
-    }
-    return Vec::new();
-}
 
 pub fn decode_str(mstr: &str) -> String {
     if let Ok(v) = decode(&mstr) {
@@ -32,9 +26,9 @@ pub fn decode_str(mstr: &str) -> String {
     return "".to_string();
 }
 
-#[doc = /**
+/**
  * Builds the packet.. It is a BytesMut
- */]
+ */
 pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) -> BytesMut {
     let tme = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
@@ -57,11 +51,11 @@ pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) ->
 }
 
 
-#[doc = /**
+/**
  * Returns either nothing or a struct Datagram, which contains
  * endpoint address and packet to be sent
  *
- */]
+ */
 pub fn hello_reply_datagram(
     net_data: &NETWORK_DATA,
     profile: &PROFILE,
@@ -72,9 +66,12 @@ pub fn hello_reply_datagram(
     if let Some(sock_addr) = create_sockaddr(&net_data) {
         if let Ok(net_seqnum) = net_data.seqnum.parse::<i32>() {
             let mut total_seqnum = net_seqnum + seqnum;
+            //println!("hello_reply_datagram");
+            let pyld = payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM);
+            //println!("{:?}", &pyld);
             let datagrm = DATAGRAM {
                 sock_addr,
-                payload: payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM),
+                payload: pyld,
             };
             return Some(datagrm);
         }

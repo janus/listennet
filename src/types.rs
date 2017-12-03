@@ -6,6 +6,7 @@ pub struct ENDPOINT<'a> {
     pub udp_port: &'a str,
 }
 
+#[derive(Debug)]
 pub struct DATAGRAM {
     pub sock_addr: SocketAddr,
     pub payload: BytesMut,
