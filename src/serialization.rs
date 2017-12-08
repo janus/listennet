@@ -3,37 +3,32 @@ use time;
 use std::str;
 use edcert::ed25519;
 use base64::{decode, encode};
-use std::net::SocketAddr;
-use types::{DATAGRAM, PROFILE, NETWORK_DATA};
+use types::{DATAGRAM, PROFILE, HELLONETWORKDATA};
 use dsocket::create_sockaddr;
 
 const BUFFER_CAPACITY_MESSAGE: usize = 1300;
-
 const VEC_LEN: usize = 8;
-
 const HELLO: &'static str = "hello";
-
 const HELLO_CONFIRM: &'static str = "hello_confirm";
 
 
-
 pub fn decode_str(mstr: &str) -> String {
-    if let Ok(v) = decode(&mstr) {
-        if let Ok(vv) = String::from_utf8(v) {
-            return vv;
+    if let Ok(val) = decode(&mstr) {
+        if let Ok(val_str) = String::from_utf8(val) {
+            return val_str;
         }
     }
     return "".to_string();
 }
 
-#[doc = /**
+/**
  * Builds the packet.. It is a BytesMut
- */]
+ */
 pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) -> BytesMut {
     let tme = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
 
-    let mut msg = format!(
+    let msg = format!(
         "{} {} {} {} {} {} {}",
         hd,
         profile.pub_key,
@@ -51,28 +46,24 @@ pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) ->
 }
 
 
-#[doc = /**
+/**
  * Returns either nothing or a struct Datagram, which contains
  * endpoint address and packet to be sent
  *
- */]
+ */
 pub fn hello_reply_datagram(
-    net_data: &NETWORK_DATA,
+    hello_data: &HELLONETWORKDATA,
     profile: &PROFILE,
     secret: &[u8; 64],
     seqnum: i32,
 ) -> Option<DATAGRAM> {
 
-    if let Some(sock_addr) = create_sockaddr(&net_data) {
-        if let Ok(net_seqnum) = net_data.seqnum.parse::<i32>() {
-            let mut total_seqnum = net_seqnum + seqnum;
-            //println!("hello_reply_datagram");
-            let pyld = payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM);
-            //println!("{:?}", &pyld);
-            let datagrm = DATAGRAM {
-                sock_addr,
-                payload: pyld,
-            };
+    if let Some(sock_addr) = create_sockaddr(&hello_data) {
+        if let Ok(net_seqnum) = hello_data.seqnum.parse::<i32>() {
+            let total_seqnum = net_seqnum + seqnum;
+
+            let payload = payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM);
+            let datagrm = DATAGRAM { sock_addr, payload };
             return Some(datagrm);
         }
     }
@@ -80,11 +71,12 @@ pub fn hello_reply_datagram(
 }
 
 
-pub fn from_bytes(packet: &BytesMut) -> Option<NETWORK_DATA> {
+pub fn from_bytes(packet: &BytesMut) -> Option<HELLONETWORKDATA> {
     if let Ok(str_buf) = str::from_utf8(&packet[..]) {
+
         let vec: Vec<&str> = str_buf.split_whitespace().collect();
         if vec.len() == VEC_LEN {
-            let network_data = NETWORK_DATA {
+            let hello_network_data = HELLONETWORKDATA {
                 hd: vec[0].to_string(),
                 pub_key: vec[1].to_string(),
                 pay_addr: vec[2].to_string(),
@@ -94,13 +86,13 @@ pub fn from_bytes(packet: &BytesMut) -> Option<NETWORK_DATA> {
                 seqnum: vec[6].to_string(),
                 sig: vec[7].to_string(),
             };
-            return Some(network_data);
+            return Some(hello_network_data);
         }
     }
     None
 }
 
-pub fn extract_payload(net_data: &NETWORK_DATA) -> String {
+pub fn extract_payload(net_data: &HELLONETWORKDATA) -> String {
     format!(
         "{} {} {} {} {} {} {}",
         net_data.hd,
@@ -116,12 +108,11 @@ pub fn extract_payload(net_data: &NETWORK_DATA) -> String {
 #[cfg(test)]
 mod test {
     use std::str;
-    use time;
     use serialization;
     use edcert::ed25519;
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
-    use types::{DATAGRAM, PROFILE, ENDPOINT, NETWORK_DATA};
+    use types::{DATAGRAM, PROFILE, ENDPOINT, HELLONETWORKDATA};
     use handle::handler;
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
@@ -195,7 +186,38 @@ mod test {
             _ => {
                 assert!(false);
             }
-
         }
+    }
+
+    #[test]
+    fn test_received_packet() {
+        let hd = "hello";
+        let pub_key = "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=";
+
+        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
+
+        let ip_address = "224.0.0.4";
+        let udp_port = "42238";
+        let tme = "1512275605";
+        let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
+        let seqnum = 89;
+
+        let mut rslt = BytesMut::with_capacity(1400);
+
+        let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
+         AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
+
+        rslt.put(nt_packet);
+
+        let nt_data: HELLONETWORKDATA = serialization::from_bytes(&rslt).unwrap();
+
+        assert_eq!(nt_data.hd, hd);
+        assert_eq!(nt_data.pub_key, pub_key);
+        assert_eq!(nt_data.pay_addr, pay_addr);
+        assert_eq!(serialization::decode_str(&nt_data.ip_address), ip_address);
+        assert_eq!(serialization::decode_str(&nt_data.udp_port), udp_port);
+        assert_eq!(nt_data.tme, tme);
+        assert_eq!(nt_data.sig, sig);
+
     }
 }

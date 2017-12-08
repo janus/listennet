@@ -1,10 +1,10 @@
 use mio::udp::*;
 use std::net::SocketAddr;
 use serialization::decode_str;
-use types::NETWORK_DATA;
+use types::HELLONETWORKDATA;
 
 
-pub fn UDPsocket(ipadr: &str, port: &str) -> UdpSocket {
+pub fn udp_socket(ipadr: &str, port: &str) -> UdpSocket {
     let ip_and_port = format!("{}:{}", ipadr, port);
     let saddr: SocketAddr = ip_and_port.parse::<SocketAddr>().unwrap();
     let socket = match UdpSocket::bind(&saddr) {
@@ -15,9 +15,9 @@ pub fn UDPsocket(ipadr: &str, port: &str) -> UdpSocket {
 }
 
 
-pub fn create_sockaddr(net_data: &NETWORK_DATA) -> Option<SocketAddr> {
-    let ip_address = decode_str(&net_data.ip_address);
-    let port = decode_str(&net_data.udp_port);
+pub fn create_sockaddr(hello_data: &HELLONETWORKDATA) -> Option<SocketAddr> {
+    let ip_address = decode_str(&hello_data.ip_address);
+    let port = decode_str(&hello_data.udp_port);
     let addr = format!("{}:{}", ip_address, port);
     if let Ok(saddr) = addr.parse::<SocketAddr>() {
         return Some(saddr);

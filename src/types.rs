@@ -19,7 +19,8 @@ pub struct PROFILE<'a> {
     pub endpoint: ENDPOINT<'a>,
 }
 
-pub struct NETWORK_DATA {
+
+pub struct HELLONETWORKDATA {
     pub hd: String,
     pub udp_port: String,
     pub pub_key: String,
