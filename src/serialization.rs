@@ -6,7 +6,7 @@ use base64::{decode, encode};
 use types::{DATAGRAM, PROFILE, HELLONETWORKDATA};
 use dsocket::create_sockaddr;
 
-const BUFFER_CAPACITY_MESSAGE: usize = 1300;
+const BUFFER_CAPACITY_MESSAGE: usize = 1400;
 const VEC_LEN: usize = 8;
 const HELLO: &'static str = "hello";
 const HELLO_CONFIRM: &'static str = "hello_confirm";
@@ -194,18 +194,36 @@ mod test {
         let hd = "hello";
         let pub_key = "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=";
 
-        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
+        let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIp\
+        NLTGK9Tjom/BWDSUGPl+nafzlHDTY\
+        W7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda\
+        3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1\
+        nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x\
+        5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby\
+        6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw\
+        3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
 
         let ip_address = "224.0.0.4";
         let udp_port = "42238";
         let tme = "1512275605";
-        let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
+        let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMg\
+        BMwT3eCheSpstx1o4QCw==";
         let seqnum = 89;
 
         let mut rslt = BytesMut::with_capacity(1400);
 
         let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
-         AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7hdI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3FXRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zuUFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
+         AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9T\
+         jom/BWDSUGPl+nafzlHDTYW7hdI4yZ5\
+         ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOd\
+         J/MTyBlWXFCR+HAo3FXRitBqxiX1nKh\
+         XpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0\
+         Ww68/eIFmb1zuUFljQJKprrX88XypNDv\
+         jYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8\
+         b+gw3r3+1nKatmIkjn2so1d01QraTlMq\
+         VSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 \
+         OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2Dkgs\
+         Msng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
 
         rslt.put(nt_packet);
 
@@ -218,6 +236,7 @@ mod test {
         assert_eq!(serialization::decode_str(&nt_data.udp_port), udp_port);
         assert_eq!(nt_data.tme, tme);
         assert_eq!(nt_data.sig, sig);
+
 
     }
 }

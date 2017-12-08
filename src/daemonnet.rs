@@ -7,7 +7,7 @@ use mio::udp::*;
 use types::{DATAGRAM, PROFILE, ENDPOINT};
 
 
-const BUFFER_CAPACITY: usize = 800;
+const BUFFER_CAPACITY: usize = 1400;
 const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
