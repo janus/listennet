@@ -3,13 +3,13 @@ use time;
 use std::str;
 use edcert::ed25519;
 use base64::{decode, encode};
-use types::{DATAGRAM, PROFILE, HELLONETWORKDATA};
+use types::{Datagram, Profile, HelloNetworkData};
 use dsocket::create_sockaddr;
 
 const BUFFER_CAPACITY_MESSAGE: usize = 1400;
 const VEC_LEN: usize = 8;
-const HELLO: &'static str = "hello";
-const HELLO_CONFIRM: &'static str = "hello_confirm";
+const HELLO: u8 = 16;
+const HELLO_CONFIRM: u8 = 32;
 
 
 pub fn decode_str(mstr: &str) -> String {
@@ -24,20 +24,21 @@ pub fn decode_str(mstr: &str) -> String {
 /**
  * Builds the packet.. It is a BytesMut
  */
-pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) -> BytesMut {
-    let tme = time::get_time().sec + 70;
+pub fn payload(profile: &Profile, seqnum: usize, secret: &[u8; 64], packet_type: u8) -> BytesMut {
+    let timestamp = time::get_time().sec + 70;
     let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
 
     let msg = format!(
         "{} {} {} {} {} {} {}",
-        hd,
+        packet_type,
         profile.pub_key,
         profile.pay_addr,
         profile.endpoint.ip_address,
         profile.endpoint.udp_port,
-        tme,
+        timestamp,
         seqnum
     );
+
     let sig = ed25519::sign(msg.as_bytes(), secret);
     rslt.put(msg);
     rslt.put(" ");
@@ -52,39 +53,49 @@ pub fn payload(profile: &PROFILE, seqnum: usize, secret: &[u8; 64], hd: &str) ->
  *
  */
 pub fn hello_reply_datagram(
-    hello_data: &HELLONETWORKDATA,
-    profile: &PROFILE,
+    hello_data: &HelloNetworkData,
+    profile: &Profile,
     secret: &[u8; 64],
     seqnum: i32,
-) -> Option<DATAGRAM> {
+) -> Datagram {
 
-    if let Some(sock_addr) = create_sockaddr(&hello_data) {
-        if let Ok(net_seqnum) = hello_data.seqnum.parse::<i32>() {
-            let total_seqnum = net_seqnum + seqnum;
-
-            let payload = payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM);
-            let datagrm = DATAGRAM { sock_addr, payload };
-            return Some(datagrm);
-        }
+    let total_seqnum = hello_data.seqnum + seqnum;
+    let payload = payload(&profile, total_seqnum as usize, secret, HELLO_CONFIRM);
+    Datagram {
+        sock_addr: hello_data.sock_addr,
+        payload,
     }
-    None
 }
 
 
-pub fn from_bytes(packet: &BytesMut) -> Option<HELLONETWORKDATA> {
+pub fn from_bytes(packet: &BytesMut) -> Option<HelloNetworkData> {
     if let Ok(str_buf) = str::from_utf8(&packet[..]) {
 
         let vec: Vec<&str> = str_buf.split_whitespace().collect();
         if vec.len() == VEC_LEN {
-            let hello_network_data = HELLONETWORKDATA {
-                hd: vec[0].to_string(),
-                pub_key: vec[1].to_string(),
+            let packet_type = vec[0].parse::<u8>().unwrap_or(0 as u8);
+            let pub_key = decode(vec[1]).unwrap_or(Vec::new());
+            let ip_address = decode_str(vec[3]);
+            let port = decode_str(vec[4]);
+            let addr = format!("{}:{}", ip_address, port);
+            let sock_addr = match create_sockaddr(&addr) {
+                Some(saddr) => saddr,
+                None => {
+                    return None;
+                }
+            };
+            let sig = decode(vec[7]).unwrap_or(Vec::new());
+            let seqnum = vec[6].parse::<i32>().unwrap_or(0 as i32);
+            let timestamp = vec[5].parse::<u32>().unwrap_or(0 as u32);
+
+            let hello_network_data = HelloNetworkData {
+                packet_type,
+                pub_key,
                 pay_addr: vec[2].to_string(),
-                ip_address: vec[3].to_string(),
-                udp_port: vec[4].to_string(),
-                tme: vec[5].to_string(),
-                seqnum: vec[6].to_string(),
-                sig: vec[7].to_string(),
+                timestamp,
+                seqnum,
+                sock_addr,
+                sig,
             };
             return Some(hello_network_data);
         }
@@ -92,15 +103,15 @@ pub fn from_bytes(packet: &BytesMut) -> Option<HELLONETWORKDATA> {
     None
 }
 
-pub fn extract_payload(net_data: &HELLONETWORKDATA) -> String {
+pub fn extract_payload(net_data: &HelloNetworkData) -> String {
     format!(
         "{} {} {} {} {} {} {}",
-        net_data.hd,
-        net_data.pub_key,
+        net_data.packet_type,
+        encode(&net_data.pub_key),
         net_data.pay_addr,
-        net_data.ip_address,
-        net_data.udp_port,
-        net_data.tme,
+        encode(&net_data.sock_addr.ip().to_string()),
+        encode(&net_data.sock_addr.port().to_string()),
+        net_data.timestamp,
         net_data.seqnum
     )
 }
@@ -112,8 +123,9 @@ mod test {
     use edcert::ed25519;
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
-    use types::{DATAGRAM, PROFILE, ENDPOINT, HELLONETWORKDATA};
+    use types::{Datagram, Profile, EndPoint, HelloNetworkData};
     use handle::handler;
+    use std::net::{IpAddr, Ipv4Addr};
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();
@@ -125,73 +137,38 @@ mod test {
         udp_port: &'a str,
         pub_key: &'a str,
         pay_addr: &'a str,
-    ) -> PROFILE<'a> {
-        let endpoint = ENDPOINT {
+    ) -> Profile<'a> {
+        let endpoint = EndPoint {
             ip_address,
             udp_port: udp_port,
         };
-        PROFILE {
+        Profile {
             pub_key,
             pay_addr,
             endpoint,
         }
     }
 
-    fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
+    fn pong_host(packet_type: u8) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let bytes = serialization::payload(&profile, 45, &secret, hd);
+        let bytes = serialization::payload(&profile, 45, &secret, packet_type);
         return (bytes, pub_key.clone(), secret);
     }
 
     #[test]
     fn serialization_test_header_msg() {
-        let (mbytes, _, _) = pong_host("hello_confirm");
-        let header_str = str::from_utf8(&mbytes[0..13]).expect("Found invalid UTF-8");
-        assert_eq!(header_str, "hello_confirm");
+        let (mbytes, _, _) = pong_host(32);
+        let header_str = str::from_utf8(&mbytes[0..2]).expect("Found invalid UTF-8");
+        let packet_type = header_str.parse::<u8>().unwrap_or(0 as u8);
+        assert_eq!(packet_type, 32);
     }
 
-    #[test]
-    fn serialization_on_pong_sockaddr() {
-        let (mbytes, pub_key, secret) = pong_host("hello");
-        let ip_addr = encode("224.0.0.3");
-        let udp_port = encode("41235");
-
-        let cloned_pub_key = pub_key.clone();
-        let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let soc = "224.0.0.3:41235".parse().unwrap();
-        match handler(&mbytes, &profile, &secret) {
-            Some(n) => {
-                assert_eq!(n.sock_addr, soc);
-            }
-            _ => {
-                assert!(false);
-            }
-        }
-    }
-
-    #[test]
-    fn serialization_on_pong_packet() {
-        let (mbytes, pub_key, secret) = pong_host("hello");
-        let (ip_addr, udp_port) = (encode("41235"), encode("224.0.0.3"));
-        let cloned_pub_key = pub_key.clone();
-        let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let seqnum = 45;
-        let rtn_pkt = serialization::payload(&profile, seqnum, &secret, "hello");
-        match handler(&mbytes, &profile, &secret) {
-            Some(n) => {
-                assert_eq!(&n.payload[0..5], &rtn_pkt[0..5]);
-            }
-            _ => {
-                assert!(false);
-            }
-        }
-    }
 
     #[test]
     fn test_received_packet() {
-        let hd = "hello";
+        let packet_type = 16;
         let pub_key = "Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=";
 
         let pay_addr = "AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIp\
@@ -204,15 +181,15 @@ mod test {
         3r3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==";
 
         let ip_address = "224.0.0.4";
-        let udp_port = "42238";
-        let tme = "1512275605";
+        let udp_port = 42238;
+        let timestamp = 1512275605 as u32;
         let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMg\
         BMwT3eCheSpstx1o4QCw==";
         let seqnum = 89;
 
         let mut rslt = BytesMut::with_capacity(1400);
 
-        let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
+        let nt_packet = "16 Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
          AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9T\
          jom/BWDSUGPl+nafzlHDTYW7hdI4yZ5\
          ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOd\
@@ -227,15 +204,18 @@ mod test {
 
         rslt.put(nt_packet);
 
-        let nt_data: HELLONETWORKDATA = serialization::from_bytes(&rslt).unwrap();
+        let nt_data: HelloNetworkData = serialization::from_bytes(&rslt).unwrap();
 
-        assert_eq!(nt_data.hd, hd);
-        assert_eq!(nt_data.pub_key, pub_key);
+        assert_eq!(nt_data.packet_type, packet_type);
+        assert_eq!(encode(&nt_data.pub_key), pub_key);
         assert_eq!(nt_data.pay_addr, pay_addr);
-        assert_eq!(serialization::decode_str(&nt_data.ip_address), ip_address);
-        assert_eq!(serialization::decode_str(&nt_data.udp_port), udp_port);
-        assert_eq!(nt_data.tme, tme);
-        assert_eq!(nt_data.sig, sig);
+        assert_eq!(
+            nt_data.sock_addr.ip(),
+            IpAddr::V4(Ipv4Addr::new(224, 0, 0, 4))
+        );
+        assert_eq!(nt_data.sock_addr.port(), udp_port);
+        assert_eq!(nt_data.timestamp, timestamp);
+        assert_eq!(encode(&nt_data.sig), sig);
 
 
     }

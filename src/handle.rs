@@ -3,48 +3,46 @@ use bytes::{BufMut, BytesMut};
 use std::str;
 use edcert::ed25519;
 use base64::decode;
-use types::{DATAGRAM, PROFILE};
+use types::{Datagram, Profile, PacketType};
 
-const HELLO: &'static str = "hello";
+const HELLO: &'static str = "16";
 
 
 /**
  * This is where packet from multicast is verified(hash) by ed25519 curve
  */
-pub fn handler(packet: &BytesMut, profile: &PROFILE, secret: &[u8; 64]) -> Option<DATAGRAM> {
+pub fn handler(packet: &BytesMut, profile: &Profile, secret: &[u8; 64]) -> Option<Datagram> {
+
     match header_type(packet) {
-        Some(ref vv) if vv == HELLO => {
+        PacketType::Hello => {
             if let Some(hello_data) = from_bytes(packet) {
                 let payload = extract_payload(&hello_data);
-                let pub_key = decode(&hello_data.pub_key).unwrap_or(Vec::new());
-                let sig = decode(&hello_data.sig).unwrap_or(Vec::new());
 
-                let len = packet.len() - sig.len();
-                if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-                    if let Some(v) = hello_reply_datagram(
-                        &hello_data,
-                        profile,
-                        secret,
-                        len as i32,
-                    )
-                    {
-                        return Some(v);
-                    }
+                let len = packet.len() - hello_data.sig.len() - 1;
+                if ed25519::verify(payload.as_bytes(), &hello_data.sig, &hello_data.pub_key) {
+                    let v = hello_reply_datagram(&hello_data, profile, secret, len as i32);
+                    return Some(v);
                 }
             }
         }
-        Some(_) => {}
-        None => {}
+        _ => {}
     }
     None
 }
 
 
-pub fn header_type(packet: &BytesMut) -> Option<String> {
-    if let Ok(v) = str::from_utf8(&packet[0..5]) {
-        return Some(v.to_string());
+pub fn header_type(packet: &BytesMut) -> PacketType {
+    if let Ok(v) = str::from_utf8(&packet[0..2]) {
+        match v {
+            HELLO => {
+                return PacketType::Hello;
+            }
+            _ => {
+                return PacketType::Unknown;
+            }
+        }
     }
-    None
+    PacketType::Unknown
 }
 
 
@@ -55,9 +53,10 @@ mod test {
     use edcert::ed25519;
     use base64::encode;
     use bytes::{BufMut, BytesMut};
-    use types::{PROFILE, ENDPOINT, HELLONETWORKDATA};
+    use types::{Profile, EndPoint, HelloNetworkData};
     use handle::handler;
     use std::str;
+    use std::net::{IpAddr, Ipv4Addr};
 
 
     fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
@@ -70,12 +69,12 @@ mod test {
         udp_port: &'a str,
         pub_key: &'a str,
         pay_addr: &'a str,
-    ) -> PROFILE<'a> {
-        let endpoint = ENDPOINT {
+    ) -> Profile<'a> {
+        let endpoint = EndPoint {
             ip_address,
             udp_port: udp_port,
         };
-        PROFILE {
+        Profile {
             pub_key,
             pay_addr,
             endpoint,
@@ -104,24 +103,29 @@ mod test {
 
         let mut rslt = BytesMut::with_capacity(1400);
 
-        let nt_packet = "hello Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
+        let nt_packet = "16 Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s= \
          AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9Tjom/BWDSUGPl+nafzlHDTYW7h\
          dI4yZ5ew18JH4JW9jbhUFrviQzM7xlELEVf4h9lFX5QVkbPppSwg0cda3Pbv7kOdJ/MTyBlWXFCR+HAo3F\
          XRitBqxiX1nKhXpHAZsMciLq8V6RjsNAQwdsdMFvSlVK/7XAt3FaoJoAsncM1Q9x5+3V0Ww68/eIFmb1zu\
          UFljQJKprrX88XypNDvjYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8b+gw3r\
-         3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q==
-		 MjI0LjAuMC40 NDIyMzg= 1512275605 89
-		 4qBNrBNA9wdMxfmUZxL9kP+X/1wFzgSeWkoN4TXs7YdkWA0VIWGqRGEe8Czw1M/gwd1xk1P6egp+deQ6STejBg==";
+         3+1nKatmIkjn2so1d01QraTlMqVSsbxNrRFi9wrf+M7Q== \
+		 MjI0LjAuMC40 NDIyMzg= 1512275605 89 \
+		 Rd1epQKkRK15DgWAUrfByA2GapZzQOunQgpmREFlrRRMq0kWleXGNpyLI/mUS8gbkaRvJ1h3qGq/CSFiQww4Bw==";
+
 
         rslt.put(nt_packet);
 
         let datagram = handler(&rslt, &profile, &secret).unwrap();
 
-        assert_eq!(header(&datagram.payload), "hello_confirm");
+        let packet_type = 32 as u8; //hello_confirm  packet type
 
-        let nt_data: HELLONETWORKDATA = serialization::from_bytes(&datagram.payload).unwrap();
-        assert_eq!(serialization::decode_str(&nt_data.ip_address), "224.0.0.3");
-        assert_eq!(serialization::decode_str(&nt_data.udp_port), "41238");
+        let nt_data: HelloNetworkData = serialization::from_bytes(&datagram.payload).unwrap();
+        assert_eq!(
+            nt_data.sock_addr.ip(),
+            IpAddr::V4(Ipv4Addr::new(224, 0, 0, 3))
+        );
+        assert_eq!(nt_data.sock_addr.port(), 41238);
+        assert_eq!(nt_data.packet_type, packet_type);
 
     }
 

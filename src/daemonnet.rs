@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
 use mio::udp::*;
-use types::{DATAGRAM, PROFILE, ENDPOINT};
+use types::{Datagram, Profile, EndPoint};
 
 
 const BUFFER_CAPACITY: usize = 1400;
@@ -45,14 +45,14 @@ const SENDER: Token = Token(1);
 
 
 pub struct LudpNet<'a> {
-    profile: PROFILE<'a>,
+    profile: Profile<'a>,
     secret: [u8; 64],
     shutdown: bool,
-    pub send_queue: VecDeque<DATAGRAM>,
+    pub send_queue: VecDeque<Datagram>,
 }
 
 impl<'a> LudpNet<'a> {
-    pub fn new(profile: PROFILE<'a>, secret: [u8; 64]) -> LudpNet<'a> {
+    pub fn new(profile: Profile<'a>, secret: [u8; 64]) -> LudpNet<'a> {
         LudpNet {
             secret,
             profile,
@@ -64,7 +64,7 @@ impl<'a> LudpNet<'a> {
     pub fn read_udpsocket(
         &mut self,
         rx: &UdpSocket,
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+        callback: fn(&BytesMut, &Profile, &[u8; 64]) -> Option<Datagram>,
         _: &mut Poll,
         token: Token,
         _: Ready,
@@ -125,7 +125,7 @@ impl<'a> LudpNet<'a> {
         &mut self,
         tx: UdpSocket,
         rx: UdpSocket,
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+        callback: fn(&BytesMut, &Profile, &[u8; 64]) -> Option<Datagram>,
     ) {
         let mut poll = Poll::new().unwrap();
         poll.register(&tx, SENDER, Ready::writable(), PollOpt::edge())
@@ -158,7 +158,7 @@ mod test {
     use edcert::ed25519;
     use base64::encode;
     use bytes::{BufMut, BytesMut};
-    use types::{DATAGRAM, PROFILE, ENDPOINT};
+    use types::{Datagram, Profile, EndPoint};
     use daemonnet::LudpNet;
     use dsocket::udp_socket;
     use std::net::Ipv4Addr;
@@ -167,10 +167,10 @@ mod test {
     use std::str;
 
     fn daemon_net(
-        profile: PROFILE,
+        profile: Profile,
         tx: UdpSocket,
         rx: UdpSocket,
-        callback: fn(&BytesMut, &PROFILE, &[u8; 64]) -> Option<DATAGRAM>,
+        callback: fn(&BytesMut, &Profile, &[u8; 64]) -> Option<Datagram>,
         secret: [u8; 64],
     ) {
         let mut ludpnet = LudpNet::new(profile, secret);
@@ -187,40 +187,28 @@ mod test {
         udp_port: &'a str,
         pub_key: &'a str,
         pay_addr: &'a str,
-    ) -> PROFILE<'a> {
-        let endpoint = ENDPOINT {
+    ) -> Profile<'a> {
+        let endpoint = EndPoint {
             ip_address,
             udp_port: udp_port,
         };
-        PROFILE {
+        Profile {
             pub_key,
             pay_addr,
             endpoint,
         }
     }
 
-    fn pong_host(hd: &str) -> (BytesMut, String, [u8; 64]) {
+    fn pong_host(packet_type: u8) -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) = encodeVal("41238", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
         //let vec_st: Vec<&str> = vec.iter().map(|s| s as &str).collect();
-        let bytes = serialization::payload(&profile, 45, &secret, hd);
+        let bytes = serialization::payload(&profile, 45, &secret, packet_type);
         return (bytes, pub_key.clone(), secret);
     }
 
 
-	#[test]
-    fn test_udp_socket_send_recv() {
-        let (mbytes, pub_key, secret) = pong_host("hello");
-        let cloned_pub_key = pub_key.clone();
-        let ip_addr = "224.0.0.3";
-        let udp_port = "41215";
-        let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-
-        let daem = LudpNet::new(profile, secret);
-        handler(&mbytes, &daem.profile, &daem.secret);
-        assert_eq!(0, daem.send_queue.len());
-    }
 
     //#[test]
     fn daemonnet_send_packet() {
@@ -231,8 +219,10 @@ mod test {
         rx_udpsock
             .join_multicast_v4(&"227.1.1.100".parse().unwrap(), &saddr)
             .unwrap();
+            
+        let packet_type = 16;
 
-        let (_, pub_key, secret) = pong_host("hello");
+        let (_, pub_key, secret) = pong_host(packet_type);
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile("224.0.0.4", "42238", &pub_key, &cloned_pub_key);
         daemon_net(profile, tx_udpsock, rx_udpsock, handler, secret);
