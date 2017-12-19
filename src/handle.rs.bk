@@ -27,7 +27,7 @@ pub fn handler(packet: &BytesMut, profile: &Profile, secret: &[u8; 64]) -> Optio
                 }
 
                 Err(e) => {
-                    trace!("Failed: {:?} @ <from_bytes funtion>", e);
+                    trace!("Failed: {} @ <from_bytes funtion>", e);
                 }
             }
         }

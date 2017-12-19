@@ -104,11 +104,7 @@ impl<'a> LudpNet<'a> {
                             self.send_queue.push_front(datagram);
                         }
                         Err(e) => {
-                            trace!(
-                                "Error send UDP:: {:?} and the sock_addr is {:?}",
-                                e,
-                                &datagram.sock_addr
-                            );
+                            trace!("Error send UDP:: {:?} and the sock_addr is {:?}",e,&datagram.sock_addr);
                             return;
                         }
                     };

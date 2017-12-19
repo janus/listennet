@@ -17,5 +17,7 @@ edcert = "*"
 base64 = "0.6.0"
 mio = "0.6.10"
 time = "0.1.38"
+derive-error = "0.0.3"
+log = "0.3"
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 
