@@ -1,7 +1,7 @@
 use mio::udp::*;
 use std::net::SocketAddr;
 use serialization::decode_str;
-use types::HelloNetworkData;
+use types::HelloData;
 
 
 pub fn udp_socket(ipadr: &str, port: &str) -> UdpSocket {

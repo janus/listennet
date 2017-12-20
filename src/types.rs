@@ -20,7 +20,7 @@ pub struct Profile<'a> {
 }
 
 #[derive(Debug)]
-pub struct HelloNetworkData {
+pub struct HelloData {
     pub packet_type: u8,
     pub pub_key: Vec<u8>,
     pub pay_addr: String,
@@ -34,5 +34,7 @@ pub struct HelloNetworkData {
 pub enum PacketType {
     Hello,
     Hello_confirm,
+    Time,
+    Time_confirm,
     Unknown,
 }

@@ -199,15 +199,6 @@ mod test {
         }
     }
 
-    fn pong_host(packet_type: u8) -> (BytesMut, String, [u8; 64]) {
-        let (ip_addr, udp_port, pub_key, secret) = encodeVal("41238", "224.0.0.3");
-        let cloned_pub_key = pub_key.clone();
-        let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let bytes = serialization::payload(&profile, 45, &secret, packet_type);
-        return (bytes, pub_key.clone(), secret);
-    }
-
-
 
     //#[test]
     fn daemonnet_send_packet() {
@@ -221,7 +212,7 @@ mod test {
 
         let packet_type = 16;
 
-        let (_, pub_key, secret) = pong_host(packet_type);
+        let (_, _, pub_key, secret) = encodeVal("41238", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile("224.0.0.4", "42238", &pub_key, &cloned_pub_key);
         daemon_net(profile, tx_udpsock, rx_udpsock, handler, secret);

@@ -4,7 +4,7 @@ use time;
 use std::str;
 use edcert::ed25519;
 use base64::{decode, encode};
-use types::{Datagram, Profile, HelloNetworkData};
+use types::{Datagram, Profile, HelloData};
 use std::net::SocketAddr;
 use dsocket::create_sockaddr;
 use std::net;
@@ -16,7 +16,9 @@ use base64;
 const BUFFER_CAPACITY_MESSAGE: usize = 1400;
 const VEC_LEN: usize = 8;
 const HELLO: u8 = 16;
-const HELLO_CONFIRM: u8 = 0x2a;
+const HELLO_CONFIRM: u8 = 42;
+const TIME: u8 = 48;
+const TIME_CONFIRM: u8 = 52;
 
 
 #[derive(Debug, Error)]
@@ -40,22 +42,12 @@ pub fn decode_str(mstr: &str) -> String {
 }
 
 
-fn byte_string(byte_val: u8) -> &'static str {
-    match (byte_val) {
-        16 => "\x10",
-        42 => "\x2a",
-        _ => "\x00",
-    }
-
-}
-
 
 /**
  * Builds the packet.. It is a BytesMut
  */
-pub fn payload(profile: &Profile, seqnum: u32, secret: &[u8; 64], packet_type: u8) -> BytesMut {
-    let timestamp = time::get_time().sec + 70;
-
+fn payload(profile: &Profile, seqnum: u32, secret: &[u8; 64], packet_type: u8) -> BytesMut {
+    let timestamp = time::get_time().sec;
     let msg = format!(
         "{} {} {} {} {} {}",
         profile.pub_key,
@@ -65,14 +57,43 @@ pub fn payload(profile: &Profile, seqnum: u32, secret: &[u8; 64], packet_type: u
         timestamp,
         seqnum
     );
-
+    let mut pkt_bytes = BytesMut::with_capacity(1400);
+    pkt_bytes.put::<u8>(packet_type);
+    pkt_bytes.put(" ");
+    
     let sig = ed25519::sign(msg.as_bytes(), secret);
-    let imsg = format!("{} {} {}", byte_string(packet_type), msg, encode(&sig));
+    let imsg = format!("{} {}",msg, encode(&sig));
+    pkt_bytes.put(imsg);
+    pkt_bytes
 
-    let rslt = BytesMut::from(imsg.as_bytes());
-    rslt
 }
 
+
+pub fn make_hello_packet(profile: &Profile, seqnum: u32, secret: &[u8; 64]) -> BytesMut {
+    payload(profile, seqnum, secret, HELLO)
+
+}
+
+pub fn make_hello_confirm_packet(profile: &Profile, seqnum: u32, secret: &[u8; 64]) -> BytesMut {
+    payload(profile, seqnum, secret, HELLO_CONFIRM)
+
+}
+
+/**
+ * Not related to this project but for learning
+ * 
+ * 
+ */
+pub fn get_time_packet(seqnum: u32) ->BytesMut {
+    let timestamp = time::get_time().sec;
+    let mut pkt_bytes = BytesMut::with_capacity(1400);
+    pkt_bytes.put::<u8>(TIME_CONFIRM);
+    pkt_bytes.put(" ");
+    let msg = format!("{} {}",timestamp, seqnum);
+    pkt_bytes.put(msg);
+    pkt_bytes
+
+}
 
 /**
  * Returns either nothing or a struct Datagram, which contains
@@ -80,50 +101,41 @@ pub fn payload(profile: &Profile, seqnum: u32, secret: &[u8; 64], packet_type: u
  *
  */
 pub fn hello_reply_datagram(
-    hello_data: &HelloNetworkData,
+    hello_data: &HelloData,
     profile: &Profile,
     secret: &[u8; 64],
     seqnum: u32,
 ) -> Datagram {
     let total_seqnum = hello_data.seqnum + seqnum;
-    let payload = payload(&profile, total_seqnum, secret, HELLO_CONFIRM);
-
+    
     Datagram {
         sock_addr: hello_data.sock_addr,
-        payload,
+        payload: make_hello_confirm_packet(profile, total_seqnum, secret)
     }
 }
 
 
-pub fn from_bytes(packet: &BytesMut) -> Result<HelloNetworkData, Error> {
+pub fn from_bytes(packet: &BytesMut) -> Result<HelloData, Error> {
     let str_buf = str::from_utf8(&packet[..])?;
     let vec: Vec<&str> = str_buf.split_whitespace().collect();
-
     if vec.len() == VEC_LEN {
-        let seqnum = vec[6].parse::<u32>()?;
-        let timestamp = vec[5].parse::<u64>()?;
-        let packet_type: u8 = packet[0];
-        let pub_key = decode(vec[1])?;
-
         let addr = format!("{}:{}", decode_str(vec[3]), decode_str(vec[4]));
-        let sock_addr = addr.parse::<SocketAddr>()?;
-        let sig = decode(vec[7])?;
-        let hello_network_data = HelloNetworkData {
-            packet_type,
-            pub_key,
+        let hello_network_data = HelloData {
+            packet_type: packet[0],
+            pub_key: decode(vec[1])?,
             pay_addr: vec[2].to_string(),
-            timestamp,
-            seqnum,
-            sock_addr,
-            sig,
+            timestamp: vec[5].parse()?,
+            seqnum: vec[6].parse()?,
+            sock_addr: addr.parse::<SocketAddr>()?,
+            sig: decode(vec[7])?
         };
         return Ok(hello_network_data);
     }
     Err(Error::RuntimeError("Bad packet".to_string()))
-
 }
 
-pub fn extract_payload(net_data: &HelloNetworkData) -> String {
+
+pub fn serialize_payload(net_data: &HelloData) -> String {
     format!(
         " {} {} {} {} {} {} ",
         encode(&net_data.pub_key),
@@ -135,6 +147,7 @@ pub fn extract_payload(net_data: &HelloNetworkData) -> String {
     )
 }
 
+
 #[cfg(test)]
 mod test {
     use std::str;
@@ -142,7 +155,7 @@ mod test {
     use edcert::ed25519;
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
-    use types::{Datagram, Profile, EndPoint, HelloNetworkData};
+    use types::{Datagram, Profile, EndPoint, HelloData};
     use handle::handler;
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -168,17 +181,17 @@ mod test {
         }
     }
 
-    fn pong_host(packet_type: u8) -> (BytesMut, String, [u8; 64]) {
+    fn pong_host() -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
         let cloned_pub_key = pub_key.clone();
         let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let packet = serialization::payload(&profile, 45, &secret, packet_type);
+        let packet = serialization::make_hello_confirm_packet(&profile, 45, &secret);
         return (packet, pub_key.clone(), secret);
     }
 
     #[test]
     fn serialization_test_header_msg() {
-        let (packet, _, _) = pong_host(42);
+        let (packet, _, _) = pong_host();
         let packet_type: u8 = 42;
         assert_eq!(packet[0], packet_type);
     }
@@ -219,7 +232,7 @@ mod test {
          Msng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
 
         let rslt = BytesMut::from(&nt_packet[..]);
-        let nt_data: HelloNetworkData = serialization::from_bytes(&rslt).unwrap();
+        let nt_data: HelloData = serialization::from_bytes(&rslt).unwrap();
 
         assert_eq!(nt_data.packet_type, packet_type);
         assert_eq!(encode(&nt_data.pub_key), pub_key);
