@@ -1,5 +1,8 @@
 use bytes::{BufMut, BytesMut};
 use std::net::SocketAddr;
+use std::fmt;
+use base64::encode;
+
 
 pub struct EndPoint<'a> {
     pub ip_address: &'a str,
@@ -12,29 +15,37 @@ pub struct Datagram {
     pub payload: BytesMut,
 }
 
-
 pub struct Profile<'a> {
     pub pub_key: &'a str,
     pub pay_addr: &'a str,
     pub endpoint: EndPoint<'a>,
 }
 
-#[derive(Debug)]
 pub struct HelloData {
-    pub packet_type: u8,
-    pub pub_key: Vec<u8>,
+    pub kind: u8,
+    pub pub_key: [u8; 32],
     pub pay_addr: String,
-    pub seqnum: u32,
-    pub timestamp: u64,
+    pub timestamp: i64,
     pub sock_addr: SocketAddr,
     pub sig: Vec<u8>,
 }
 
 
-pub enum PacketType {
-    Hello,
-    Hello_confirm,
-    Time,
-    Time_confirm,
-    Unknown,
+impl <'a>fmt::Display for Profile<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} {} {}", self.pub_key, self.pay_addr, self.endpoint.ip_address, self.endpoint.udp_port)
+    }
 }
+
+impl fmt::Display for HelloData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} {} {} {}",
+            encode(&self.pub_key),
+            self.pay_addr,
+            encode(&self.sock_addr.ip().to_string()),
+            encode(&self.sock_addr.port().to_string()),
+            self.timestamp
+        )
+    }
+}
+
