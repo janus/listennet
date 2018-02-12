@@ -8,17 +8,14 @@ use types::{Datagram, Profile, HelloData};
 use std::net::SocketAddr;
 use dsocket::create_sockaddr;
 use std::net;
-
 use std::num;
 use base64;
-
+use daemonnet::LudpNet;
 
 const BUFFER_CAPACITY_MESSAGE: usize = 1400;
-const VEC_LEN: usize = 8;
+const VEC_LEN: usize = 7;
 const HELLO: u8 = 16;
 const HELLO_CONFIRM: u8 = 42;
-const TIME: u8 = 48;
-const TIME_CONFIRM: u8 = 52;
 
 
 #[derive(Debug, Error)]
@@ -41,58 +38,28 @@ pub fn decode_str(mstr: &str) -> String {
     return "".to_string();
 }
 
-
-
 /**
  * Builds the packet.. It is a BytesMut
  */
-fn payload(profile: &Profile, seqnum: u32, secret: &[u8; 64], packet_type: u8) -> BytesMut {
+fn payload(profile: &Profile, secret: &[u8; 64], pkt_type: u8) -> BytesMut {
     let timestamp = time::get_time().sec;
-    let msg = format!(
-        "{} {} {} {} {} {}",
-        profile.pub_key,
-        profile.pay_addr,
-        profile.endpoint.ip_address,
-        profile.endpoint.udp_port,
-        timestamp,
-        seqnum
-    );
-    let mut pkt_bytes = BytesMut::with_capacity(1400);
-    pkt_bytes.put::<u8>(packet_type);
-    pkt_bytes.put(" ");
-    
+    let msg = format!("{} {}", profile, timestamp);
     let sig = ed25519::sign(msg.as_bytes(), secret);
-    let imsg = format!("{} {}",msg, encode(&sig));
+    let imsg = format!(" {} {}", msg, encode(&sig));
+
+    let mut pkt_bytes = BytesMut::with_capacity(1400);
+    pkt_bytes.put::<u8>(pkt_type);
     pkt_bytes.put(imsg);
     pkt_bytes
-
 }
 
-
-pub fn make_hello_packet(profile: &Profile, seqnum: u32, secret: &[u8; 64]) -> BytesMut {
-    payload(profile, seqnum, secret, HELLO)
-
+pub fn hello_packet(profile: &Profile,  secret: &[u8; 64]) -> BytesMut {
+    payload(profile, secret, HELLO)
+    //use random to generate number
 }
 
-pub fn make_hello_confirm_packet(profile: &Profile, seqnum: u32, secret: &[u8; 64]) -> BytesMut {
-    payload(profile, seqnum, secret, HELLO_CONFIRM)
-
-}
-
-/**
- * Not related to this project but for learning
- * 
- * 
- */
-pub fn get_time_packet(seqnum: u32) ->BytesMut {
-    let timestamp = time::get_time().sec;
-    let mut pkt_bytes = BytesMut::with_capacity(1400);
-    pkt_bytes.put::<u8>(TIME_CONFIRM);
-    pkt_bytes.put(" ");
-    let msg = format!("{} {}",timestamp, seqnum);
-    pkt_bytes.put(msg);
-    pkt_bytes
-
+pub fn hello_confirm_packet(profile: &Profile,  secret: &[u8; 64]) -> BytesMut {
+    payload(profile, secret, HELLO_CONFIRM)
 }
 
 /**
@@ -100,51 +67,52 @@ pub fn get_time_packet(seqnum: u32) ->BytesMut {
  * endpoint address and packet to be sent
  *
  */
-pub fn hello_reply_datagram(
-    hello_data: &HelloData,
-    profile: &Profile,
-    secret: &[u8; 64],
-    seqnum: u32,
-) -> Datagram {
-    let total_seqnum = hello_data.seqnum + seqnum;
-    
+pub fn reply_hello_datagram(data: &HelloData, ldnet: &LudpNet) -> Datagram {
     Datagram {
-        sock_addr: hello_data.sock_addr,
-        payload: make_hello_confirm_packet(profile, total_seqnum, secret)
+        sock_addr: ldnet.sock_addr,
+        payload: hello_confirm_packet(&ldnet.profile, &ldnet.secret)
     }
 }
 
+pub fn hello_datagram(ldnet: &LudpNet)-> Datagram {
+    Datagram {
+        sock_addr: ldnet.sock_addr,
+        payload: hello_packet(&ldnet.profile, &ldnet.secret)
+    }
+}
 
-pub fn from_bytes(packet: &BytesMut) -> Result<HelloData, Error> {
+fn from_slice(bytes: &[u8]) -> [u8; 32] {
+    let mut rtn = [0; 32];
+    for i in 0..rtn.len() {
+        rtn[i] = bytes[i];
+    }
+    rtn
+}
+
+pub fn from_packet(packet: &BytesMut) -> Result<HelloData, Error> {
     let str_buf = str::from_utf8(&packet[..])?;
     let vec: Vec<&str> = str_buf.split_whitespace().collect();
+    let timestamp =  vec[5].parse::<i64>()?;
+    
+    //if !(timestamp + 90 > time::get_time().sec){
+    //    return Err(Error::RuntimeError("Stale timestamp".to_owned()));
+    //}
+    //uncomment the above when not in test mode
+    println!("{}", "Inside From Packet");
+    let pub_key_vec = decode(vec[1])?;
     if vec.len() == VEC_LEN {
         let addr = format!("{}:{}", decode_str(vec[3]), decode_str(vec[4]));
         let hello_network_data = HelloData {
-            packet_type: packet[0],
-            pub_key: decode(vec[1])?,
-            pay_addr: vec[2].to_string(),
-            timestamp: vec[5].parse()?,
-            seqnum: vec[6].parse()?,
+            kind: packet[0],
+            pub_key: from_slice(&pub_key_vec),
+            pay_addr: vec[2].to_owned(),
+            timestamp,
             sock_addr: addr.parse::<SocketAddr>()?,
-            sig: decode(vec[7])?
+            sig: decode(vec[6])?
         };
         return Ok(hello_network_data);
     }
     Err(Error::RuntimeError("Bad packet".to_string()))
-}
-
-
-pub fn serialize_payload(net_data: &HelloData) -> String {
-    format!(
-        " {} {} {} {} {} {} ",
-        encode(&net_data.pub_key),
-        net_data.pay_addr,
-        encode(&net_data.sock_addr.ip().to_string()),
-        encode(&net_data.sock_addr.port().to_string()),
-        net_data.timestamp,
-        net_data.seqnum
-    )
 }
 
 
@@ -155,46 +123,9 @@ mod test {
     use edcert::ed25519;
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
-    use types::{Datagram, Profile, EndPoint, HelloData};
-    use handle::handler;
+    use types::{Datagram,  EndPoint, HelloData};
     use std::net::{IpAddr, Ipv4Addr};
-
-    fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
-        let (psk, msk) = ed25519::generate_keypair();
-        return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
-    }
-
-    fn build_profile<'a>(
-        ip_address: &'a str,
-        udp_port: &'a str,
-        pub_key: &'a str,
-        pay_addr: &'a str,
-    ) -> Profile<'a> {
-        let endpoint = EndPoint {
-            ip_address,
-            udp_port: udp_port,
-        };
-        Profile {
-            pub_key,
-            pay_addr,
-            endpoint,
-        }
-    }
-
-    fn pong_host() -> (BytesMut, String, [u8; 64]) {
-        let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
-        let cloned_pub_key = pub_key.clone();
-        let profile = build_profile(&ip_addr, &udp_port, &pub_key, &cloned_pub_key);
-        let packet = serialization::make_hello_confirm_packet(&profile, 45, &secret);
-        return (packet, pub_key.clone(), secret);
-    }
-
-    #[test]
-    fn serialization_test_header_msg() {
-        let (packet, _, _) = pong_host();
-        let packet_type: u8 = 42;
-        assert_eq!(packet[0], packet_type);
-    }
+    use time;
 
 
     #[test]
@@ -213,10 +144,11 @@ mod test {
 
         let ip_address = "224.0.0.4";
         let udp_port = 42238;
-        let timestamp = 1512275605 as u64;
+        let timestamp = 1512275605 as i64;
+        //let timestamp = time::get_time().sec;
         let sig = "OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2DkgsMsng4rJwZWMfhdc3SxOCk/I70nMg\
         BMwT3eCheSpstx1o4QCw==";
-        let seqnum = 89;
+
 
         let nt_packet = b"\x10 Ea5pbdL9KkvKcpdkpQwiJfb8tq68Xl5T5Erihf7Zx0s=
          AAAAB3NzaC1yc2EAAAABIwAAAQEAklOUpkDHrfHY17SbrmTIpNLTGK9T\
@@ -227,14 +159,14 @@ mod test {
          Ww68/eIFmb1zuUFljQJKprrX88XypNDv\
          jYNby6vw/Pb0rwert/EnmZ+AW4OZPnTPI89ZPmVMLuayrD2cE86Z/il8\
          b+gw3r3+1nKatmIkjn2so1d01QraTlMq\
-         VSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 89 \
+         VSsbxNrRFi9wrf+M7Q== MjI0LjAuMC40 NDIyMzg= 1512275605 \
          OhWwXXH7e2O7YFk5P7UFfq/4tkb+g2uSI2Dkgs\
          Msng4rJwZWMfhdc3SxOCk/I70nMgBMwT3eCheSpstx1o4QCw==";
 
         let rslt = BytesMut::from(&nt_packet[..]);
-        let nt_data: HelloData = serialization::from_bytes(&rslt).unwrap();
+        let nt_data: HelloData = serialization::from_packet(&rslt).unwrap();
 
-        assert_eq!(nt_data.packet_type, packet_type);
+        assert_eq!(nt_data.kind, packet_type);
         assert_eq!(encode(&nt_data.pub_key), pub_key);
         assert_eq!(nt_data.pay_addr, pay_addr);
         assert_eq!(
@@ -244,6 +176,11 @@ mod test {
         assert_eq!(nt_data.sock_addr.port(), udp_port);
         assert_eq!(nt_data.timestamp, timestamp);
         assert_eq!(encode(&nt_data.sig), sig);
+
+        //let (pk, mk) = ed25519::generate_keypair();
+        //println!("{}", encode(&mk[..]));
+        //println!("{}", encode(&mk[32..]));
+
 
     }
 }
