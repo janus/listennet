@@ -1,14 +1,13 @@
-use bytes::{BytesMut, Buf, BufMut};
+use bytes::{Buf, BufMut, BytesMut};
 use mio::{Events, Poll, PollOpt, Ready, Token};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::net::Ipv4Addr;
 use mio::udp::*;
-use types::{Datagram, Profile, EndPoint};
+use types::{Datagram, EndPoint, Profile};
 use serialization::hello_datagram;
 use neighbors::Neighbors;
 use time;
-
 
 const BUFFER_CAPACITY: usize = 1400;
 const LISTENER: Token = Token(0);
@@ -41,7 +40,6 @@ const SENDER: Token = Token(1);
  *
  */
 
-
 //#[derive(Clone)]
 pub struct LudpNet<'a> {
     pub profile: Profile<'a>,
@@ -64,23 +62,23 @@ impl<'a> LudpNet<'a> {
             set_time: time::get_time().sec,
             sock_addr: sock_addr,
             queue: VecDeque::new(),
-            nodes: Neighbors::new()
+            nodes: Neighbors::new(),
         }
     }
-    
+
     pub fn time_to_discover_neighbors(&mut self) {
-		if self.discover {
-			let rst = hello_datagram(&self);
-			self.queue.push_front(rst);
-			self.discover = false;
-			self.nodes = Neighbors::new();		
-			self.set_time = time::get_time().sec + 600;//Added 10 minutes
-		} else{
-			if self.set_time < time::get_time().sec  {
-				self.discover = true;
-			}
-		}	
-	}
+        if self.discover {
+            let rst = hello_datagram(&self);
+            self.queue.push_front(rst);
+            self.discover = false;
+            self.nodes = Neighbors::new();
+            self.set_time = time::get_time().sec + 600; //Added 10 minutes
+        } else {
+            if self.set_time < time::get_time().sec {
+                self.discover = true;
+            }
+        }
+    }
 
     pub fn read_udpsocket(
         &mut self,
@@ -114,7 +112,7 @@ impl<'a> LudpNet<'a> {
     pub fn send_packet(&mut self, tx: &UdpSocket, _: &mut Poll, token: Token, _: Ready) {
         match token {
             SENDER => {
-				self.time_to_discover_neighbors();
+                self.time_to_discover_neighbors();
                 while let Some(datagram) = self.queue.pop_front() {
                     match tx.send_to(&datagram.payload, &datagram.sock_addr) {
                         Ok(Some(size)) if size == datagram.payload.len() => {}
@@ -172,7 +170,6 @@ impl<'a> LudpNet<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use time;
@@ -180,14 +177,13 @@ mod test {
     use edcert::ed25519;
     use base64::encode;
     use bytes::{BufMut, BytesMut};
-    use types::{Datagram, Profile, EndPoint};
+    use types::{Datagram, EndPoint, Profile};
     use daemonnet::LudpNet;
-    use dsocket::{udp_socket, create_sockaddr};
+    use dsocket::{create_sockaddr, udp_socket};
     use std::net::Ipv4Addr;
     use handle::handler;
     use mio::udp::*;
     use std::str;
-
 
     fn build_profile<'a>(
         ip_address: &'a str,
@@ -206,7 +202,6 @@ mod test {
         }
     }
 
-
     //#[test]
     fn daemonnet_send_packet() {
         let rx_udpsock = udp_socket("224.0.0.7", "42234");
@@ -221,13 +216,12 @@ mod test {
         let pay_addr = "ouehjddjk=";
         let ip_addr = "224.0.0.4";
         let udp_port = "42238";
-        let sock_addr = create_sockaddr(&format!("{}:{}", "224.0.0.4", "42238")).unwrap();  
+        let sock_addr = create_sockaddr(&format!("{}:{}", "224.0.0.4", "42238")).unwrap();
         //let profile = build_profile(&encode(&ip_addr), &encode(&udp_port), &pub_key, &pay_addr);
         //let mut ludpnet = LudpNet::new(profile, prv_key.as_bytes(), sock_addr);
         //ludpnet.start_net(tx_udpsock, rx_udpsock, handler);
-        
+
         //daemon_net(profile, tx_udpsock, rx_udpsock, handler, secret);
     }
-
 
 }
